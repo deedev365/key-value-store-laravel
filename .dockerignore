@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+vendor
+tests
+database/database.sqlite
+storage/logs/*
+.env
+.env.example
+coverage.xml
+composer.phar
+Dockerfile
+.dockerignore
