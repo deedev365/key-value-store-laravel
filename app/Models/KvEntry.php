@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Casts\AsKey;
+use App\ValueObjects\Key;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -13,7 +15,7 @@ use Illuminate\Database\Eloquent\Model;
  * with json_decode($json, false), which yields whatever JSON type was stored —
  * a string, a number, a bool, a list or a stdClass — not a stdClass every time.
  *
- * @property string $key
+ * @property Key $key
  * @property mixed $value
  * @property int $recorded_at
  */
@@ -34,6 +36,7 @@ class KvEntry extends Model
      * keeps objects and arrays distinct on the way back.
      */
     protected $casts = [
+        'key' => AsKey::class,
         'value' => 'object',
         'recorded_at' => 'integer',
     ];

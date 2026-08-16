@@ -364,8 +364,10 @@ on any violation.
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
 pull request against `master`:
 
-1. Install dependencies, check code style (`pint --test`), run static analysis
-   (`phpstan analyse`), run migrations against SQLite.
+1. Validate the Composer manifest (`composer validate --strict`, which fails if
+   `composer.lock` has drifted from `composer.json`), install dependencies,
+   check code style (`pint --test`), run static analysis (`phpstan analyse`),
+   run migrations against SQLite.
 2. Run the full test suite with coverage (`--coverage-clover`); the report is
    uploaded as a build artifact and, if `CODECOV_TOKEN` is set, to Codecov.
 3. Run the Behat suite (`behat --no-snippets`), which boots its own in-memory

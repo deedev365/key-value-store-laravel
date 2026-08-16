@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Exceptions\InvalidKeyException;
+use App\ValueObjects\Key;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use stdClass;
@@ -20,17 +22,6 @@ use stdClass;
  */
 class StoreObjectRequest extends FormRequest
 {
-    /**
-     * Key names the API cannot serve back, because a literal route claims the
-     * same path segment (see routes/api.php). A key stored under one of these
-     * would be written happily and then read as something else entirely —
-     * GET /object/get_all_records is the listing, not that key's value — so
-     * the write is refused rather than left silently unreadable.
-     *
-     * @var list<string>
-     */
-    private const RESERVED_KEYS = ['get_all_records'];
-
     /**
      * Decoded body, memoised because the raw content is parsed on each access.
      * false means "not parsed yet" — null is a meaningful result (invalid body).
@@ -92,17 +83,14 @@ class StoreObjectRequest extends FormRequest
 
             $key = (string) array_key_first($data);
 
-            if (trim($key) === '') {
-                $validator->errors()->add('key', 'Key must not be empty.');
-            } elseif (in_array($key, self::RESERVED_KEYS, true)) {
-                $validator->errors()->add('key', "Key '{$key}' is reserved by the API.");
-            } elseif (mb_strlen($key) > 255) {
-                $validator->errors()->add('key', 'Key must not be longer than 255 characters.');
-            } elseif (! preg_match('/^[A-Za-z0-9_.-]+$/', $key)) {
-                $validator->errors()->add(
-                    'key',
-                    'Key may only contain letters, digits, underscores, hyphens and dots.'
-                );
+            // Key::fromString() is the single authority on what a key may be;
+            // the exception carries the reason, which is what the caller is
+            // told. Checking by construction means the validator cannot drift
+            // from the route constraint, since both come from the same class.
+            try {
+                Key::fromString($key);
+            } catch (InvalidKeyException $e) {
+                $validator->errors()->add('key', $e->getMessage());
             }
         });
     }

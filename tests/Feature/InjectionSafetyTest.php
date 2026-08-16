@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\KvEntry;
+use App\ValueObjects\Key;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
@@ -703,10 +704,16 @@ class InjectionSafetyTest extends TestCase
         //
         // The script is a static file under public/, which the test kernel
         // does not serve, so it is read from disk.
+        // Asserted against the Key value object rather than against a literal:
+        // pinning app.js to a hard-coded regex here would let the backend rule
+        // change while this test kept happily checking the old one.
         $script = file_get_contents(public_path('js/app.js'));
 
-        $this->assertStringContainsString('/^[A-Za-z0-9_.-]+$/', $script);
-        $this->assertStringContainsString('key.length <= 255', $script);
-        $this->assertStringContainsString('maxlength="255"', $this->get('/')->assertOk()->getContent());
+        $this->assertStringContainsString(Key::REGEX, $script);
+        $this->assertStringContainsString('key.length <= '.Key::MAX_LENGTH, $script);
+        $this->assertStringContainsString(
+            'maxlength="'.Key::MAX_LENGTH.'"',
+            $this->get('/')->assertOk()->getContent()
+        );
     }
 }

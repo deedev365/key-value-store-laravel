@@ -2,7 +2,8 @@ const api = (path) => '/object' + path;
 
 // Keys are also used as URL path segments and rendered on this page,
 // so they're restricted to a safe charset (must match the backend
-// rule in StoreObjectRequest / routes/api.php).
+// rule, which lives in App\ValueObjects\Key and is asserted against
+// this line by InjectionSafetyTest).
 const KEY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 
 function isValidKey(key) {

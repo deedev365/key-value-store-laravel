@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: ["master"]
 
+# Third-party actions run with this token; give them read access only.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test (PHP ${{ matrix.php }})
@@ -35,6 +39,9 @@ jobs:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: ${{ runner.os }}-composer-
+
+      - name: Validate Composer manifest
+        run: composer validate --strict
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction

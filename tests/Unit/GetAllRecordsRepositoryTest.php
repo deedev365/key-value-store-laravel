@@ -2,6 +2,10 @@
 
 namespace Tests\Unit;
 
+use App\Models\KvEntry;
+use App\ValueObjects\Key;
+use Illuminate\Support\Collection;
+
 /**
  * EloquentKeyValueRepository::allLatest() — the storage call behind
  * GET /object/get_all_records/{page?}, where the page is cut in SQL rather
@@ -9,6 +13,21 @@ namespace Tests\Unit;
  */
 class GetAllRecordsRepositoryTest extends RepositoryTestCase
 {
+    /**
+     * The keys of a page, as plain strings. The model casts `key` to a Key
+     * value object, and these assertions are about which keys came back in
+     * which order, not about the object wrapping them.
+     *
+     * @param  Collection<int, KvEntry>  $entries
+     * @return list<string>
+     */
+    private function keysOf(Collection $entries): array
+    {
+        return $entries->pluck('key')
+            ->map(fn (Key $key): string => $key->value)
+            ->all();
+    }
+
     public function test_all_latest_returns_one_row_per_key(): void
     {
         $this->repository->store('a', 'a1', 1000);
@@ -43,8 +62,8 @@ class GetAllRecordsRepositoryTest extends RepositoryTestCase
             $this->repository->store($key, $key.'1', 1000);
         }
 
-        $this->assertSame(['a', 'b'], $this->repository->allLatest(2)->pluck('key')->all());
-        $this->assertSame(['c', 'd'], $this->repository->allLatest(2, 2)->pluck('key')->all());
+        $this->assertSame(['a', 'b'], $this->keysOf($this->repository->allLatest(2)));
+        $this->assertSame(['c', 'd'], $this->keysOf($this->repository->allLatest(2, 2)));
     }
 
     public function test_all_latest_is_empty_past_the_last_page(): void
@@ -64,8 +83,8 @@ class GetAllRecordsRepositoryTest extends RepositoryTestCase
             }
         }
 
-        $this->assertSame(['a', 'b'], $this->repository->allLatest(2)->pluck('key')->all());
-        $this->assertSame(['c'], $this->repository->allLatest(2, 2)->pluck('key')->all());
+        $this->assertSame(['a', 'b'], $this->keysOf($this->repository->allLatest(2)));
+        $this->assertSame(['c'], $this->keysOf($this->repository->allLatest(2, 2)));
         $this->assertSame('c4', $this->repository->allLatest(2, 2)->first()->value);
     }
 

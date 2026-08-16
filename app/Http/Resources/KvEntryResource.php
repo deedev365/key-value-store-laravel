@@ -34,7 +34,9 @@ class KvEntryResource extends JsonResource
         $entry = $this->resource;
 
         return [
-            'key' => $entry->key,
+            // Cast explicitly rather than leaning on Key's JsonSerializable:
+            // this array is also read by callers that never encode it.
+            'key' => (string) $entry->key,
             'value' => $entry->value,
             'timestamp' => $entry->recorded_at,
         ];
