@@ -60,6 +60,9 @@ class StoreObjectTest extends TestCase
             ]);
     }
 
+    /**
+     * @return array<string, array{mixed}>
+     */
     public static function falsyValueProvider(): array
     {
         return [

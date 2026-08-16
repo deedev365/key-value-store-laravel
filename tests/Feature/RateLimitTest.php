@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\KvEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Response;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -16,6 +17,9 @@ class RateLimitTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * @return TestResponse<Response>
+     */
     private function getFrom(string $ip, string $uri = '/object/get_all_records'): TestResponse
     {
         return $this->call('GET', $uri, [], [], [], [
@@ -26,6 +30,8 @@ class RateLimitTest extends TestCase
 
     /**
      * Spends $count of the quota and returns the last response.
+     *
+     * @return TestResponse<Response>
      */
     private function exhaust(string $ip, int $count): TestResponse
     {

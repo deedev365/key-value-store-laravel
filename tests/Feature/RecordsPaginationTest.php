@@ -37,6 +37,9 @@ class RecordsPaginationTest extends TestCase
         }
     }
 
+    /**
+     * @return array<int, mixed>
+     */
     private function keysOnPage(?int $page = null): array
     {
         $uri = $page === null

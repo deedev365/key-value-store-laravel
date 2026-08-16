@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\KvEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Response;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -16,6 +17,10 @@ class RequestLimitsTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * @param  array<string, string>  $headers
+     * @return TestResponse<Response>
+     */
     private function postRaw(string $body, array $headers = []): TestResponse
     {
         return $this->call('POST', '/object', [], [], [], array_merge([

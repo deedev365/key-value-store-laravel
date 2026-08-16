@@ -23,6 +23,8 @@ class StoreObjectRequest extends FormRequest
     /**
      * Decoded body, memoised because the raw content is parsed on each access.
      * false means "not parsed yet" — null is a meaningful result (invalid body).
+     *
+     * @var array<string, mixed>|false|null
      */
     private array|false|null $body = false;
 
@@ -37,6 +39,9 @@ class StoreObjectRequest extends FormRequest
         return true;
     }
 
+    /**
+     * @return array<string, list<string>>
+     */
     public function rules(): array
     {
         return [];
@@ -116,6 +121,8 @@ class StoreObjectRequest extends FormRequest
      * otherwise be misread as an array body and rejected. Nested values keep
      * their JSON shape for the same reason — an associative decode would
      * re-encode {"0":"a","1":"b"} as the array ["a","b"].
+     *
+     * @return array<string, mixed>|null
      */
     private function bodyProperties(): ?array
     {

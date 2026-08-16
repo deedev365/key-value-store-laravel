@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\KvEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -27,6 +28,9 @@ class InjectionSafetyTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * @return TestResponse<Response>
+     */
     private function postRaw(string $body): TestResponse
     {
         return $this->call('POST', '/object', [], [], [], [
@@ -53,6 +57,9 @@ class InjectionSafetyTest extends TestCase
     // SQL injection
     // ---------------------------------------------------------------
 
+    /**
+     * @return array<string, array{string}>
+     */
     public static function sqlPayloads(): array
     {
         return [
@@ -145,6 +152,9 @@ class InjectionSafetyTest extends TestCase
     // PHP: code execution, object injection, command injection
     // ---------------------------------------------------------------
 
+    /**
+     * @return array<string, array{string}>
+     */
     public static function phpPayloads(): array
     {
         return [
@@ -185,6 +195,9 @@ class InjectionSafetyTest extends TestCase
         $this->assertSame($payload, $entry->value);
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
     public static function shellPayloads(): array
     {
         return [
@@ -216,6 +229,9 @@ class InjectionSafetyTest extends TestCase
     // Path traversal / local file inclusion
     // ---------------------------------------------------------------
 
+    /**
+     * @return array<string, array{string}>
+     */
     public static function traversalKeys(): array
     {
         return [
@@ -236,6 +252,9 @@ class InjectionSafetyTest extends TestCase
             ->assertJsonValidationErrors(['key']);
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
     public static function encodedTraversalPaths(): array
     {
         return [
@@ -278,6 +297,9 @@ class InjectionSafetyTest extends TestCase
     // HTML / JavaScript
     // ---------------------------------------------------------------
 
+    /**
+     * @return array<string, array{string}>
+     */
     public static function htmlPayloads(): array
     {
         return [
@@ -390,6 +412,9 @@ class InjectionSafetyTest extends TestCase
     // Header / log injection
     // ---------------------------------------------------------------
 
+    /**
+     * @return array<string, array{string}>
+     */
     public static function crlfKeys(): array
     {
         return [
@@ -626,6 +651,9 @@ class InjectionSafetyTest extends TestCase
             ->assertJsonValidationErrors(['key']);
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
     public static function invalidTimestamps(): array
     {
         return [

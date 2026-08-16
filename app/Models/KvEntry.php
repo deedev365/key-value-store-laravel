@@ -2,18 +2,23 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * A single immutable version of a key's value. Rows are never updated or
  * deleted by the API — a write always inserts a new row, which is what
  * makes the store "version-controlled".
+ *
+ * $value is declared as mixed rather than left to the cast: 'object' decodes
+ * with json_decode($json, false), which yields whatever JSON type was stored —
+ * a string, a number, a bool, a list or a stdClass — not a stdClass every time.
+ *
+ * @property string $key
+ * @property mixed $value
+ * @property int $recorded_at
  */
 class KvEntry extends Model
 {
-    use HasFactory;
-
     public $timestamps = true;
 
     protected $fillable = [
