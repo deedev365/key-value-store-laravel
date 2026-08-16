@@ -20,9 +20,11 @@ class StoreObjectController extends Controller
 
     public function __invoke(StoreObjectRequest $request): JsonResponse
     {
+        $body = $request->body();
+
         $entry = $this->repository->store(
-            $request->storageKey(),
-            $request->storageValue(),
+            $body->key->value,
+            $body->value,
             now()->timestamp,
         );
 
