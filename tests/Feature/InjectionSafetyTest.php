@@ -72,7 +72,7 @@ class InjectionSafetyTest extends TestCase
             'double quoted' => ['" OR ""="'],
             'blind boolean' => ["' AND (SELECT COUNT(*) FROM kv_entries) > 0 --"],
             'sqlite pragma' => ['; PRAGMA writable_schema = 1; --'],
-            'hex literal' => ["0x27 OR 1=1"],
+            'hex literal' => ['0x27 OR 1=1'],
         ];
     }
 

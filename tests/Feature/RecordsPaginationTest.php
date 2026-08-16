@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\KvEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -172,10 +173,10 @@ class RecordsPaginationTest extends TestCase
         // would come back with every row in the table.
         $this->seedKeys(25);
 
-        \Illuminate\Support\Facades\DB::enableQueryLog();
+        DB::enableQueryLog();
         $this->getJson('/object/get_all_records')->assertOk();
-        $log = \Illuminate\Support\Facades\DB::getQueryLog();
-        \Illuminate\Support\Facades\DB::disableQueryLog();
+        $log = DB::getQueryLog();
+        DB::disableQueryLog();
 
         $select = collect($log)->firstWhere(fn ($q) => str_contains($q['query'], 'kv_entries'));
 

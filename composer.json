@@ -53,6 +53,12 @@
         "analyse": [
             "@php vendor/bin/phpstan analyse --memory-limit=1G --ansi"
         ],
+        "lint": [
+            "@php vendor/bin/pint --test --ansi"
+        ],
+        "format": [
+            "@php vendor/bin/pint --ansi"
+        ],
         "behat": [
             "@php vendor/bin/behat --no-snippets"
         ],

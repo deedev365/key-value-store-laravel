@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -47,7 +48,7 @@ class ContentSecurityPolicyTest extends TestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('requiredDirectives')]
+    #[DataProvider('requiredDirectives')]
     public function test_the_policy_contains_directive(string $directive): void
     {
         $this->assertStringContainsString($directive, $this->policy());

@@ -217,6 +217,12 @@ To use MySQL (or any other Eloquent-supported database) instead, set
 php artisan test
 ```
 
+The same suite through PHPUnit directly:
+
+```bash
+php vendor/bin/phpunit
+```
+
 277 tests / 973 assertions. Each API endpoint has its own feature test file
 under `tests/Feature/`:
 
@@ -281,6 +287,12 @@ vendor/bin/phpunit --coverage-text
 ### BDD suite
 
 ```bash
+php vendor/bin/behat --no-snippets
+```
+
+Or through the Composer script, which runs the same command:
+
+```bash
 composer behat
 ```
 
@@ -316,12 +328,44 @@ Strict mode is on, so an undefined step fails the run rather than passing
 silently. The two front-end contract tests (`app.js` page size and key pattern)
 stay in PHPUnit: they read a static file rather than exercising the API.
 
+### Static analysis
+
+```bash
+php composer.phar run-script analyse
+```
+
+PHPStan with [larastan](https://github.com/larastan/larastan) at level 6 over
+`app/`, `config/`, `database/`, `routes/` and `tests/` — configured in
+[`phpstan.neon`](phpstan.neon). The suite currently reports no errors. If
+Composer is installed globally, `composer analyse` does the same thing.
+
+### Code style
+
+Linting is [Laravel Pint](https://laravel.com/docs/pint) on the `laravel`
+preset, configured in [`pint.json`](pint.json). To report violations without
+touching any file:
+
+```bash
+php composer.phar run-script lint
+```
+
+To fix them in place:
+
+```bash
+php composer.phar run-script format
+```
+
+Both wrap `vendor/bin/pint` (`--test` for the first), so you can call the binary
+directly if you prefer. The codebase is currently clean, and CI fails the build
+on any violation.
+
 ## CI/CD
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
 pull request against `master`:
 
-1. Install dependencies, run migrations against SQLite.
+1. Install dependencies, check code style (`pint --test`), run migrations
+   against SQLite.
 2. Run the full test suite with coverage (`--coverage-clover`); the report is
    uploaded as a build artifact and, if `CODECOV_TOKEN` is set, to Codecov.
 3. On a successful push to `master`, a `deploy` job runs and — if deploy

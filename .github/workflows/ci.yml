@@ -45,6 +45,9 @@ jobs:
           php artisan key:generate
           touch database/database.sqlite
 
+      - name: Check code style
+        run: vendor/bin/pint --test
+
       - name: Run migrations
         run: php artisan migrate --force
         env:
