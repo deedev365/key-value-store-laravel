@@ -48,6 +48,9 @@ jobs:
       - name: Check code style
         run: vendor/bin/pint --test
 
+      - name: Run static analysis
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
       - name: Run migrations
         run: php artisan migrate --force
         env:
@@ -59,6 +62,9 @@ jobs:
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: ":memory:"
+
+      - name: Run BDD suite
+        run: vendor/bin/behat --no-snippets --colors
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

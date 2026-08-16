@@ -364,11 +364,13 @@ on any violation.
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
 pull request against `master`:
 
-1. Install dependencies, check code style (`pint --test`), run migrations
-   against SQLite.
+1. Install dependencies, check code style (`pint --test`), run static analysis
+   (`phpstan analyse`), run migrations against SQLite.
 2. Run the full test suite with coverage (`--coverage-clover`); the report is
    uploaded as a build artifact and, if `CODECOV_TOKEN` is set, to Codecov.
-3. On a successful push to `master`, a `deploy` job runs and — if deploy
+3. Run the Behat suite (`behat --no-snippets`), which boots its own in-memory
+   database and so needs no migration step of its own.
+4. On a successful push to `master`, a `deploy` job runs and — if deploy
    secrets are configured (see below) — SSHes into the target server, pulls
    `master`, reinstalls dependencies, and runs migrations.
 
