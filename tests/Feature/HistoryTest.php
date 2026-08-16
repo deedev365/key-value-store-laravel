@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * GET /api/object/{key}/history
+ * GET /object/{key}/history
  */
 class HistoryTest extends TestCase
 {
@@ -20,7 +20,7 @@ class HistoryTest extends TestCase
         KvEntry::create(['key' => 'mykey', 'value' => 'value3', 'recorded_at' => 3000]);
         KvEntry::create(['key' => 'otherkey', 'value' => 'ignored', 'recorded_at' => 1500]);
 
-        $response = $this->getJson('/api/object/mykey/history');
+        $response = $this->getJson('/object/mykey/history');
 
         $response->assertOk();
         $response->assertJsonCount(3);
@@ -31,7 +31,7 @@ class HistoryTest extends TestCase
 
     public function test_history_is_an_empty_array_for_an_unknown_key(): void
     {
-        $this->getJson('/api/object/does-not-exist/history')
+        $this->getJson('/object/does-not-exist/history')
             ->assertOk()
             ->assertExactJson([]);
     }

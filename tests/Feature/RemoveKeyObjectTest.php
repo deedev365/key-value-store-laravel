@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * DELETE /api/object/{key}
+ * DELETE /object/{key}
  */
 class RemoveKeyObjectTest extends TestCase
 {
@@ -18,15 +18,15 @@ class RemoveKeyObjectTest extends TestCase
         KvEntry::create(['key' => 'mykey', 'value' => 'value1', 'recorded_at' => 1000]);
         KvEntry::create(['key' => 'mykey', 'value' => 'value2', 'recorded_at' => 2000]);
 
-        $this->deleteJson('/api/object/mykey')->assertNoContent();
+        $this->deleteJson('/object/mykey')->assertNoContent();
 
         $this->assertSame(0, KvEntry::where('key', 'mykey')->count());
-        $this->getJson('/api/object/mykey')->assertNotFound();
+        $this->getJson('/object/mykey')->assertNotFound();
     }
 
     public function test_deleting_an_unknown_key_returns_404(): void
     {
-        $this->deleteJson('/api/object/does-not-exist')
+        $this->deleteJson('/object/does-not-exist')
             ->assertNotFound()
             ->assertJsonStructure(['message']);
     }

@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * GET /api/object/get_all_records/{page?}
+ * GET /object/get_all_records/{page?}
  */
 class GetAllRecordsTest extends TestCase
 {
@@ -19,7 +19,7 @@ class GetAllRecordsTest extends TestCase
         KvEntry::create(['key' => 'a', 'value' => 'a2', 'recorded_at' => 2000]);
         KvEntry::create(['key' => 'b', 'value' => 'b1', 'recorded_at' => 1500]);
 
-        $response = $this->getJson('/api/object/get_all_records');
+        $response = $this->getJson('/object/get_all_records');
 
         $response->assertOk();
         $response->assertJsonCount(2);
@@ -30,7 +30,7 @@ class GetAllRecordsTest extends TestCase
 
     public function test_get_all_records_returns_an_empty_array_when_the_store_is_empty(): void
     {
-        $response = $this->getJson('/api/object/get_all_records');
+        $response = $this->getJson('/object/get_all_records');
 
         $response->assertOk()->assertExactJson([]);
     }

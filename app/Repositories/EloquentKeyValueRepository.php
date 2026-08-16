@@ -37,7 +37,7 @@ class EloquentKeyValueRepository implements KeyValueRepositoryInterface
             ->first();
     }
 
-    public function allLatest(): Collection
+    public function allLatest(int $limit, int $offset = 0): Collection
     {
         // The row with the highest id within each key group is its latest
         // version, since writes are append-only and id is monotonically
@@ -46,11 +46,17 @@ class EloquentKeyValueRepository implements KeyValueRepositoryInterface
             ->select(DB::raw('MAX(id) as id'))
             ->groupBy('key');
 
+        // The page is cut in SQL, not in PHP: the whole table would otherwise
+        // be hydrated into models on every request just to throw most of it
+        // away. Ordering by key is what makes paging stable — without a
+        // deterministic order, a row could appear on two pages or on none.
         return KvEntry::query()
             ->joinSub($latestIds, 'latest', function ($join) {
                 $join->on('kv_entries.id', '=', 'latest.id');
             })
             ->orderBy('kv_entries.key')
+            ->limit(max(0, $limit))
+            ->offset(max(0, $offset))
             ->get('kv_entries.*');
     }
 

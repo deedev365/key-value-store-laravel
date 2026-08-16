@@ -40,23 +40,49 @@ implemented by
 [`EloquentKeyValueRepository`](app/Repositories/EloquentKeyValueRepository.php)
 and bound in
 [`AppServiceProvider`](app/Providers/AppServiceProvider.php). The HTTP layer
-([`ObjectController`](app/Http/Controllers/Api/ObjectController.php)) only
-talks to the interface, so swapping the storage engine (e.g. for Redis or
-MongoDB) later doesn't touch routing or validation.
+(the single-action controllers in
+[`app/Http/Controllers/Api/`](app/Http/Controllers/Api)) only talks to the
+interface, so swapping the storage engine (e.g. for Redis or MongoDB) later
+doesn't touch routing or validation.
+
+Each endpoint is its own invokable controller — one file per row of the table
+below — with the request contracts in `app/Http/Requests/` and the shared
+response shape in
+[`KvEntryResource`](app/Http/Resources/KvEntryResource.php):
+
+| Endpoint | Controller |
+| --- | --- |
+| `POST /object` | [`StoreObjectController`](app/Http/Controllers/Api/StoreObjectController.php) |
+| `GET /object/{key}` | [`ShowObjectController`](app/Http/Controllers/Api/ShowObjectController.php) |
+| `GET /object/get_all_records/{page?}` | [`GetAllRecordsController`](app/Http/Controllers/Api/GetAllRecordsController.php) |
+| `GET /object/{key}/history` | [`ObjectHistoryController`](app/Http/Controllers/Api/ObjectHistoryController.php) |
+| `DELETE /object/{key}` | [`DeleteObjectController`](app/Http/Controllers/Api/DeleteObjectController.php) |
 
 ## API
 
-All endpoints are JSON in, JSON out, and live under `/api` (Laravel's default
-API route prefix).
+All endpoints are JSON in, JSON out, and live at the root — `/object`, not
+`/api/object`.
 
-### `POST /api/object`
+Every `/object` route shares a rolling per-IP limit of
+`KV_MAX_REQUESTS_PER_MINUTE` (60) requests a minute. Responses advertise
+`X-RateLimit-Limit` and `X-RateLimit-Remaining`; going over returns `429` with
+a `Retry-After` header and the seconds left in the body:
+
+```json
+{ "message": "Too many requests. Try again in 56 seconds.", "retry_after": 56 }
+```
+
+The window is rolling, so a limit reached late in the minute clears in
+seconds — the count is what the caller is told to wait, not a flat 60.
+
+### `POST /object`
 
 Stores a new version of a key. The request body is a single-property JSON
 object: the property name is the key, its value is what gets stored (any
 valid JSON type — string, number, bool, null, array or object).
 
 ```bash
-curl -X POST /api/object \
+curl -X POST /object \
   -H "Content-Type: application/json" \
   -d '{"mykey": "value1"}'
 ```
@@ -66,14 +92,23 @@ curl -X POST /api/object \
 ```
 
 `201 Created` on success. `422` if the body isn't a single-property JSON
-object, or the key is empty/too long.
+object, the key is empty/too long, or the value nests deeper than
+`KV_MAX_VALUE_DEPTH` (20) levels. `413` if the body exceeds
+`KV_MAX_BODY_BYTES` (64 KB).
 
-### `GET /api/object/{key}`
+Both limits live in [`config/kvstore.php`](config/kvstore.php). They bound how
+fast the store can grow, since history is append-only and a write is never
+reclaimed. They are storage guards rather than parser guards: PHP has already
+read and decoded the body by the time the application sees it, so
+`post_max_size` in `php.ini` and the web server's own body limit remain the
+first line of defence against genuinely large uploads.
+
+### `GET /object/{key}`
 
 Returns the latest value for `key`.
 
 ```bash
-curl /api/object/mykey
+curl /object/mykey
 ```
 
 ```json
@@ -82,13 +117,13 @@ curl /api/object/mykey
 
 `404` if the key has never been written.
 
-### `GET /api/object/{key}?timestamp={unix}`
+### `GET /object/{key}?timestamp={unix}`
 
 Returns the value that was current for `key` at `{unix}` (a UTC unix
 timestamp) — i.e. the latest version written at or before that time.
 
 ```bash
-curl "/api/object/mykey?timestamp=1440569580"
+curl "/object/mykey?timestamp=1440569580"
 ```
 
 ```json
@@ -98,13 +133,14 @@ curl "/api/object/mykey?timestamp=1440569580"
 `404` if no version of the key existed yet at that timestamp. `422` if
 `timestamp` isn't a non-negative integer.
 
-### `GET /api/object/get_all_records`
+### `GET /object/get_all_records`
+### `GET /object/get_all_records/{page}`
 
 Returns a JSON array with the latest version of every key currently in the
-store.
+store, ordered by key, `KV_RECORDS_PER_PAGE` (10) at a time.
 
 ```bash
-curl /api/object/get_all_records
+curl /object/get_all_records
 ```
 
 ```json
@@ -114,14 +150,25 @@ curl /api/object/get_all_records
 ]
 ```
 
-### `GET /api/object/{key}/history`
+Later pages are a trailing path segment — `/object/get_all_records/2`. Page
+`0` and a missing page both mean the first one, and a page past the end is an
+empty array rather than a `404`: running off the end of a list is not an
+error.
+
+The page is cut in SQL (`LIMIT`/`OFFSET` inside
+[`EloquentKeyValueRepository`](app/Repositories/EloquentKeyValueRepository.php)),
+not sliced in PHP, so serving page one does not hydrate the whole table into
+models first. Paging counts *keys*, not rows: a key written a hundred times
+still occupies one slot on one page.
+
+### `GET /object/{key}/history`
 
 Returns every version ever recorded for `key`, oldest first. An unknown key
 returns an empty array rather than `404`, since this is a listing endpoint
 like `get_all_records`.
 
 ```bash
-curl /api/object/mykey/history
+curl /object/mykey/history
 ```
 
 ```json
@@ -131,12 +178,12 @@ curl /api/object/mykey/history
 ]
 ```
 
-### `DELETE /api/object/{key}`
+### `DELETE /object/{key}`
 
 Deletes every recorded version of `key`.
 
 ```bash
-curl -X DELETE /api/object/mykey
+curl -X DELETE /object/mykey
 ```
 
 `204 No Content` on success. `404` if the key has never been written.
@@ -154,7 +201,7 @@ php artisan migrate
 php artisan serve
 ```
 
-The API is then available at `http://127.0.0.1:8000/api/object`.
+The API is then available at `http://127.0.0.1:8000/object`.
 
 To use MySQL (or any other Eloquent-supported database) instead, set
 `DB_CONNECTION`, `DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` in
@@ -166,7 +213,7 @@ To use MySQL (or any other Eloquent-supported database) instead, set
 php artisan test
 ```
 
-36 tests / 87 assertions. Each API endpoint has its own feature test file
+275 tests / 965 assertions. Each API endpoint has its own feature test file
 under `tests/Feature/`:
 
 - [`StoreObjectTest.php`](tests/Feature/StoreObjectTest.php) — `POST /object`
@@ -177,9 +224,49 @@ under `tests/Feature/`:
 - [`GetAllRecordsTest.php`](tests/Feature/GetAllRecordsTest.php) — `GET /object/get_all_records`.
 - [`RemoveKeyObjectTest.php`](tests/Feature/RemoveKeyObjectTest.php) — `DELETE /object/{key}`.
 
-- [`tests/Unit/EloquentKeyValueRepositoryTest.php`](tests/Unit/EloquentKeyValueRepositoryTest.php) —
-  the repository's query logic in isolation, including tie-breaking when two
-  writes land on the same unix second.
+- [`RequestLimitsTest.php`](tests/Feature/RequestLimitsTest.php) — body size and
+  value nesting limits, including a lying `Content-Length`.
+
+- [`RateLimitTest.php`](tests/Feature/RateLimitTest.php) — the per-IP request
+  quota, what a throttled caller is told, and that a refused write never
+  reaches the database.
+
+- [`RecordsPaginationTest.php`](tests/Feature/RecordsPaginationTest.php) — page
+  boundaries, that paging counts keys rather than versions, that the cut
+  happens in SQL, and that the front end's page size still matches the API's.
+
+- [`RecordsTableTest.php`](tests/Feature/RecordsTableTest.php) — the records
+  table's column contract, including that the readable time is formatted in
+  UTC rather than the viewer's zone.
+
+- [`FormValidationTest.php`](tests/Feature/FormValidationTest.php) — the
+  required-field contract of both forms, that the optional timestamp stayed
+  optional, that neither rule leaked into the API, and that messages and data
+  are rendered differently.
+
+- [`ContentSecurityPolicyTest.php`](tests/Feature/ContentSecurityPolicyTest.php) —
+  the policy's directives, and that the page stays compatible with it: no
+  inline script, no inline style, and every element the external script binds
+  to still present in the markup.
+
+- [`InjectionSafetyTest.php`](tests/Feature/InjectionSafetyTest.php) — hostile
+  input across every entry point (body key, body value, `{key}` path segment,
+  `?timestamp`, `{page}`): SQL, PHP code and object injection, shell
+  metacharacters, path traversal in raw and encoded forms, HTML/JS payloads,
+  CRLF header and log forging, JSON structure abuse (`__proto__`, duplicate
+  properties, `_method` smuggling), encoding limits and boundaries.
+
+`tests/Unit/` mirrors the same split one level down, covering the repository's
+query logic without going through HTTP — including tie-breaking when two writes
+land on the same unix second. Each file tests the storage call behind one
+endpoint, and they share
+[`RepositoryTestCase`](tests/Unit/RepositoryTestCase.php) for setup:
+
+- [`StoreObjectRepositoryTest.php`](tests/Unit/StoreObjectRepositoryTest.php) — `store()`.
+- [`ShowObjectRepositoryTest.php`](tests/Unit/ShowObjectRepositoryTest.php) — `findLatest()` and `findAtTimestamp()`.
+- [`GetAllRecordsRepositoryTest.php`](tests/Unit/GetAllRecordsRepositoryTest.php) — `allLatest()`.
+- [`ObjectHistoryRepositoryTest.php`](tests/Unit/ObjectHistoryRepositoryTest.php) — `history()`.
+- [`DeleteObjectRepositoryTest.php`](tests/Unit/DeleteObjectRepositoryTest.php) — `deleteAll()`.
 
 With coverage (requires Xdebug or PCOV locally):
 
@@ -222,17 +309,89 @@ need the SSH-based flow.
 
 - **Insert-only history, not a diff/patch log.** Simpler to reason about and
   query; it's the standard approach for this kind of "point-in-time" API.
+- **One controller per endpoint.** Each route points at its own invokable
+  single-action controller rather than at a method on one shared class. The
+  endpoints have nothing in common but the repository they call — different
+  verbs, different inputs, different response shapes — so a class per endpoint
+  keeps each file readable end to end and stops private helpers from quietly
+  coupling unrelated endpoints. What *is* shared is shared explicitly: the
+  response shape in [`KvEntryResource`](app/Http/Resources/KvEntryResource.php)
+  and the input contracts in `app/Http/Requests/`.
 - **`POST` body shape.** The single-property JSON body (`{"mykey": "value1"}`)
   puts the key as the JSON property name rather than under fixed
   `key`/`value` fields, so the body is restricted to exactly one property —
   anything else is a `422`. This is enforced in
   [`StoreObjectRequest`](app/Http/Requests/StoreObjectRequest.php).
+- **Values are stored verbatim.** Laravel's global `TrimStrings` and
+  `ConvertEmptyStringsToNull` middleware rewrite the parsed JSON body, which
+  would turn `"  a  "` into `"a"` and `""` into `null` before the value ever
+  reached the database. Both are skipped for the API's paths in
+  [`bootstrap/app.php`](bootstrap/app.php) so a value round-trips unchanged.
+  The `value` column is nullable for the same reason: `{"mykey": null}` is a
+  valid write.
+- **The write body is read from the raw request content.** Laravel copies a
+  decoded JSON body into the Symfony request bag, where global middleware
+  rewrites it and Symfony's `_method` override reads from it. Parsing
+  `$this->getContent()` in
+  [`StoreObjectRequest`](app/Http/Requests/StoreObjectRequest.php) keeps the
+  stored data equal to what the client actually sent. Decoding to `stdClass`
+  rather than to an associative array is what keeps `{"0":"a"}` (key `0`)
+  distinct from the array body `["a"]`, and stops
+  `{"0":"a","1":"b"}` from being re-encoded as `["a","b"]`.
+- **The records table shows the time in UTC.** Alongside the raw
+  `timestamp` there is a readable `Time (UTC)` column — `6:00pm` — rendered
+  from the same number. It is deliberately not the viewer's local time:
+  timestamps are stored as UNIX seconds in UTC, and a local rendering would
+  print a different hour than the value in the column beside it, differing per
+  reader. The cell's tooltip carries the full instant, since a bare clock time
+  cannot tell yesterday's 6pm from today's.
+- **The page shows messages as sentences and data as JSON.** A 404, a
+  validation failure, a rate-limit refusal or a deletion confirmation is only
+  a sentence, so it is printed as one — `No value found for key 'config1'.`
+  rather than the object that carried it. A record, a history list or the
+  store listing *is* the answer, so it stays JSON; flattening it into prose
+  would lose the value's type and shape.
+- **The forms refuse empty fields; the API does not.** `""` is a valid value
+  to store, so the API accepts it — but a blank box on the page is far more
+  likely to be an unfilled field than a deliberate empty string. Both write
+  inputs and the lookup key are therefore required, the message names the
+  field at fault, and typing `""` is the way to store an empty string on
+  purpose. A whitespace-only value is accepted as typed, matching the
+  verbatim-storage rule above. The lookup timestamp stays optional, since an
+  absent one means "current value". "Get value", "Full history" and "Delete
+  key" read the same field and share one guard, so the destructive button can
+  never end up more permissive than the other two.
+- **No inline CSS or JS on the page.** The front end's stylesheet and script
+  live in [`public/css/app.css`](public/css/app.css) and
+  [`public/js/app.js`](public/js/app.js) rather than inline in the Blade
+  template, which is what lets the Content-Security-Policy use `'self'`
+  instead of `'unsafe-inline'`. With `default-src 'none'` and no inline
+  escape hatch, an injected `<script>` — inline by definition — does not run.
+  `style="..."` attributes count as inline style too, so those became classes.
+- **JSON responses escape markup.**
+  [`SecurityHeaders`](app/Http/Middleware/SecurityHeaders.php) sends
+  `nosniff`/`DENY`/`no-referrer` and re-encodes JSON with `JSON_HEX_TAG` and
+  friends, so a stored `<script>` payload cannot be rendered as markup even if
+  a response is served or embedded somewhere unexpected. Values still decode
+  to exactly what was written.
+- **Paging lives in the repository, not the controller.** `allLatest()` takes
+  a mandatory `$limit` and an `$offset`, so there is deliberately no way to
+  ask the store for everything — the unbounded call that used to load the
+  whole table before slicing it in PHP no longer exists. The controller is
+  left with the two lines that turn a page number into an offset.
 - **`get_all_records` returns latest-per-key, not full history.** It reflects
   current state, not an audit log; full history is reachable per-key via
   `GET /object/{key}/history` or the timestamp query.
 - **SQLite for local dev and tests, MySQL-ready for production.** No code
   depends on SQLite specifically; switching is an `.env` change.
-- **`/api` prefix.** Laravel's default API route grouping.
+- **No `/api` prefix.** The routes are mounted at the root, matching the
+  endpoints as specified: `/object`, `/object/{key}`,
+  `/object/get_all_records`. Laravel's `withRouting()` would otherwise put
+  them under its default `/api` prefix, so
+  [`bootstrap/app.php`](bootstrap/app.php) passes `apiPrefix: ''`. They still
+  belong to the `api` middleware group, which is what carries the rate limit,
+  the body-size cap and the stateless (session-free, CSRF-free) handling —
+  the prefix and the group are separate things.
 - **Keys are a single URL path segment.** A key containing a literal `/`
   isn't supported as-is — keys are treated as opaque strings, and supporting
   slashes wasn't worth the added routing complexity.

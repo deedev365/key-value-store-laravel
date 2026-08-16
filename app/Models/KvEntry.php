@@ -22,8 +22,14 @@ class KvEntry extends Model
         'recorded_at',
     ];
 
+    /**
+     * 'object' rather than 'array': an associative decode collapses a JSON
+     * object with consecutive numeric properties into a PHP list, so
+     * {"0":"a","1":"b"} would come back out as ["a","b"]. Decoding to stdClass
+     * keeps objects and arrays distinct on the way back.
+     */
     protected $casts = [
-        'value' => 'array',
+        'value' => 'object',
         'recorded_at' => 'integer',
     ];
 }

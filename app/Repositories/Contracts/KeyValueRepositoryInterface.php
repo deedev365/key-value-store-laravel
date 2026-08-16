@@ -27,11 +27,15 @@ interface KeyValueRepositoryInterface
     public function findAtTimestamp(string $key, int $timestamp): ?KvEntry;
 
     /**
-     * The latest version of every key currently in the store.
+     * One page of the latest version of every key, ordered by key.
+     *
+     * $limit is mandatory rather than defaulted: the store grows without
+     * bound, so there is deliberately no way to ask this for everything.
+     * An $offset past the last key yields an empty collection.
      *
      * @return Collection<int, KvEntry>
      */
-    public function allLatest(): Collection;
+    public function allLatest(int $limit, int $offset = 0): Collection;
 
     /**
      * Every version ever recorded for $key, oldest first. Empty if the key

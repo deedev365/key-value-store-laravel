@@ -1,0 +1,99 @@
+* { box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 720px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    color: #1b1b18;
+    background: #fdfdfc;
+}
+
+h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+p.subtitle { color: #706f6c; margin-top: 0; margin-bottom: 1.5rem; }
+
+section {
+    border: 1px solid #e3e3e0;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+h2 { font-size: 1rem; margin: 0 0 0.75rem; }
+label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: #444; }
+
+input {
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+/* Set by the script on the field that failed validation. Deliberately not
+   :invalid, which would paint every required box red before anything is
+   typed. */
+input.field-error {
+    border-color: #c0392b;
+    background: #fff8f8;
+}
+
+.row { display: flex; gap: 0.75rem; }
+.row > div { flex: 1; }
+
+button {
+    background: #1b1b18;
+    color: #fff;
+    border: none;
+    padding: 0.45rem 0.9rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+button:hover { background: #3a3a36; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+button.secondary {
+    background: #fff;
+    color: #1b1b18;
+    border: 1px solid #ccc;
+}
+
+button.danger {
+    background: #fff;
+    color: #c0392b;
+    border: 1px solid #e0b4ae;
+}
+
+button.danger:hover { background: #fff2f2; }
+
+button.danger.small {
+    padding: 0.15rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+pre {
+    background: #f5f5f4;
+    border-radius: 4px;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.8rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-top: 0.75rem;
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; }
+th { color: #706f6c; font-weight: 600; }
+
+.muted { color: #706f6c; font-size: 0.85rem; }
+.actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+
+/* Right-aligned refresh control in the "All records" heading. */
+.heading-action { float: right; }
+
+/* Pagination row: Prev / indicator / Next. */
+.actions.pager { justify-content: space-between; align-items: center; }
