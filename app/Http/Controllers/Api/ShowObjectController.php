@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ShowObjectRequest;
 use App\Http\Resources\KvEntryResource;
-use App\Repositories\Contracts\KeyValueRepositoryInterface;
+use App\Repositories\EloquentKeyValueRepository;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -15,7 +15,7 @@ use Illuminate\Http\JsonResponse;
 class ShowObjectController extends Controller
 {
     public function __construct(
-        private readonly KeyValueRepositoryInterface $repository,
+        private readonly EloquentKeyValueRepository $repository,
     ) {}
 
     public function __invoke(ShowObjectRequest $request, string $key): JsonResponse

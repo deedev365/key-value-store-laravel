@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\KvEntryResource;
-use App\Repositories\Contracts\KeyValueRepositoryInterface;
+use App\Repositories\EloquentKeyValueRepository;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -14,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 class ObjectHistoryController extends Controller
 {
     public function __construct(
-        private readonly KeyValueRepositoryInterface $repository,
+        private readonly EloquentKeyValueRepository $repository,
     ) {}
 
     public function __invoke(string $key): JsonResponse

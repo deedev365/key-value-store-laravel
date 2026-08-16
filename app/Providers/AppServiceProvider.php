@@ -2,8 +2,6 @@
 
 namespace App\Providers;
 
-use App\Repositories\Contracts\KeyValueRepositoryInterface;
-use App\Repositories\EloquentKeyValueRepository;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -14,10 +12,13 @@ class AppServiceProvider extends ServiceProvider
 {
     /**
      * Register any application services.
+     *
+     * EloquentKeyValueRepository is not registered here: it has no
+     * constructor dependencies, so the container resolves it on its own.
      */
     public function register(): void
     {
-        $this->app->bind(KeyValueRepositoryInterface::class, EloquentKeyValueRepository::class);
+        //
     }
 
     /**

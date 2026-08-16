@@ -34,16 +34,15 @@ This lives in a single table, `kv_entries`: `id`, `key`, `value` (JSON),
 `recorded_at` (unix timestamp), `created_at`/`updated_at`. It's indexed on
 `(key, recorded_at, id)`, which covers both lookup types directly.
 
-The storage logic sits behind a `KeyValueRepositoryInterface`
-([app/Repositories/Contracts/KeyValueRepositoryInterface.php](app/Repositories/Contracts/KeyValueRepositoryInterface.php)),
-implemented by
-[`EloquentKeyValueRepository`](app/Repositories/EloquentKeyValueRepository.php)
-and bound in
-[`AppServiceProvider`](app/Providers/AppServiceProvider.php). The HTTP layer
-(the single-action controllers in
-[`app/Http/Controllers/Api/`](app/Http/Controllers/Api)) only talks to the
-interface, so swapping the storage engine (e.g. for Redis or MongoDB) later
-doesn't touch routing or validation.
+Every query lives in
+[`EloquentKeyValueRepository`](app/Repositories/EloquentKeyValueRepository.php),
+which the HTTP layer (the single-action controllers in
+[`app/Http/Controllers/Api/`](app/Http/Controllers/Api)) depends on directly —
+no interface, since there is one storage engine and the repository tests run
+against the real database rather than a double. Keeping the queries in one
+class is what stops the "latest version" rule from being restated in each
+controller; swapping the storage engine later means extracting an interface
+from this class, which is a mechanical refactor.
 
 Each endpoint is its own invokable controller — one file per row of the table
 below — with the request contracts in `app/Http/Requests/` and the shared
