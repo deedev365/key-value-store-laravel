@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\KvEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Response;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -13,6 +15,17 @@ use Tests\TestCase;
 class StoreObjectTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * @return TestResponse<Response>
+     */
+    private function postRaw(string $body): TestResponse
+    {
+        return $this->call('POST', '/object', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json',
+        ], $body);
+    }
 
     public function test_it_stores_a_key_and_returns_the_created_record(): void
     {
@@ -114,9 +127,15 @@ class StoreObjectTest extends TestCase
             ->assertJsonValidationErrors(['body']);
     }
 
-    public function test_it_rejects_an_empty_body(): void
+    /**
+     * A raw body, because postJson([]) encodes to `[]` — an empty JSON *array*,
+     * which is the array-body case below rather than this one. The empty object
+     * fails on the "exactly one property" rule instead, and that branch has no
+     * other cover.
+     */
+    public function test_it_rejects_an_empty_json_object(): void
     {
-        $this->postJson('/object', [])
+        $this->postRaw('{}')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['body']);
     }
@@ -140,6 +159,55 @@ class StoreObjectTest extends TestCase
         $this->postJson('/object', ['bad key!' => 'value1'])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['key']);
+    }
+
+    /**
+     * '/object/get_all_records' is claimed by the listing route, which is
+     * registered before the {key} wildcard. Without this guard the write
+     * succeeded with a 201 and the record could never be read back through
+     * its own URL — the listing answered instead, with an array where the
+     * caller expected the single object it had just written.
+     */
+    public function test_it_rejects_a_key_reserved_by_a_literal_route(): void
+    {
+        $this->postJson('/object', ['get_all_records' => 'value1'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['key']);
+
+        $this->assertSame(0, KvEntry::where('key', 'get_all_records')->count());
+    }
+
+    public function test_the_reserved_key_message_names_the_key(): void
+    {
+        $this->postJson('/object', ['get_all_records' => 'value1'])
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'errors.key.0',
+                "Key 'get_all_records' is reserved by the API."
+            );
+    }
+
+    /**
+     * Only the exact segment collides — a key that merely starts with it
+     * routes to the {key} wildcard like any other and must stay writable.
+     */
+    public function test_it_accepts_a_key_that_only_resembles_the_reserved_one(): void
+    {
+        $this->postJson('/object', ['get_all_records_2' => 'value1'])
+            ->assertCreated();
+
+        $this->getJson('/object/get_all_records_2')
+            ->assertOk()
+            ->assertJson(['key' => 'get_all_records_2', 'value' => 'value1']);
+    }
+
+    public function test_the_listing_route_still_answers_on_that_path(): void
+    {
+        $this->postJson('/object', ['mykey' => 'value1']);
+
+        $this->getJson('/object/get_all_records')
+            ->assertOk()
+            ->assertJson([['key' => 'mykey', 'value' => 'value1']]);
     }
 
     public function test_it_stores_a_new_version_rather_than_overwriting(): void

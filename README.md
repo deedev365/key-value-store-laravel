@@ -92,9 +92,13 @@ curl -X POST /object \
 ```
 
 `201 Created` on success. `422` if the body isn't a single-property JSON
-object, the key is empty/too long, or the value nests deeper than
+object, the key is empty/too long/reserved, or the value nests deeper than
 `KV_MAX_VALUE_DEPTH` (20) levels. `413` if the body exceeds
 `KV_MAX_BODY_BYTES` (64 KB).
+
+`get_all_records` is reserved as a key: the listing route below claims that
+path segment, so a record stored under it could never be read back through
+`GET /object/get_all_records`.
 
 Both limits live in [`config/kvstore.php`](config/kvstore.php). They bound how
 fast the store can grow, since history is append-only and a write is never
@@ -213,7 +217,7 @@ To use MySQL (or any other Eloquent-supported database) instead, set
 php artisan test
 ```
 
-275 tests / 965 assertions. Each API endpoint has its own feature test file
+277 tests / 973 assertions. Each API endpoint has its own feature test file
 under `tests/Feature/`:
 
 - [`StoreObjectTest.php`](tests/Feature/StoreObjectTest.php) — `POST /object`
@@ -273,6 +277,44 @@ With coverage (requires Xdebug or PCOV locally):
 ```bash
 vendor/bin/phpunit --coverage-text
 ```
+
+### BDD suite
+
+```bash
+composer behat
+```
+
+118 scenarios / 525 steps covering the same API behaviour in Gherkin, under
+`features/`. The suite is a second reading of the contract rather than extra
+coverage: every scenario restates in plain language what a PHPUnit test asserts
+in code, which is what makes it useful to read and what makes a drift between
+the two worth investigating.
+
+Scenarios run in-process. Each one boots its own application against an
+in-memory SQLite database and dispatches real requests through the HTTP kernel,
+so routing, middleware and validation all run exactly as they do under
+`php artisan test` — the whole suite takes about seven seconds.
+
+- `store_object.feature`, `show_object.feature`, `object_history.feature`,
+  `get_all_records.feature`, `remove_object.feature` — one file per endpoint.
+- `records_pagination.feature` — page boundaries, paging by key rather than by
+  version, and that the cut happens in SQL.
+- `request_limits.feature` — body size and nesting depth, including a lying
+  `Content-Length`.
+- `rate_limit.feature` — the per-IP quota and what a throttled caller is told.
+- `injection_safety.feature` — the hostile-input matrix. Payload lists are
+  Gherkin tables rather than `Examples` columns, because the payloads carry
+  both kinds of quote and a quoted step argument cannot hold them.
+
+Steps live in [`ApiContext.php`](tests/Behat/ApiContext.php). Values come in two
+flavours there: a plain string, and a JSON literal in single quotes (`'null'`,
+`'0'`, `'[]'`) for the scenarios where the value's JSON *type* is the thing
+under test.
+
+Behat is configured from PHP, not YAML — [`behat.dist.php`](behat.dist.php).
+Strict mode is on, so an undefined step fails the run rather than passing
+silently. The two front-end contract tests (`app.js` page size and key pattern)
+stay in PHPUnit: they read a static file rather than exercising the API.
 
 ## CI/CD
 

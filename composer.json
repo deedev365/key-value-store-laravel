@@ -11,6 +11,7 @@
         "laravel/tinker": "^3.0"
     },
     "require-dev": {
+        "behat/behat": "^4.0@alpha",
         "fakerphp/faker": "^1.23",
         "larastan/larastan": "^3.10",
         "laravel/pail": "^1.2.5",
@@ -51,6 +52,9 @@
         ],
         "analyse": [
             "@php vendor/bin/phpstan analyse --memory-limit=1G --ansi"
+        ],
+        "behat": [
+            "@php vendor/bin/behat --no-snippets"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",

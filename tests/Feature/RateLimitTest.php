@@ -51,14 +51,6 @@ class RateLimitTest extends TestCase
         $this->exhaust('10.0.0.1', $limit)->assertOk();
     }
 
-    public function test_the_request_past_the_limit_is_refused_with_429(): void
-    {
-        $limit = (int) config('kvstore.max_requests_per_minute');
-        $this->exhaust('10.0.0.2', $limit);
-
-        $this->getFrom('10.0.0.2')->assertStatus(429);
-    }
-
     public function test_the_refusal_says_how_long_to_wait(): void
     {
         $limit = (int) config('kvstore.max_requests_per_minute');
@@ -131,30 +123,21 @@ class RateLimitTest extends TestCase
         $this->getFrom('10.0.0.8')->assertOk();
     }
 
-    public function test_reads_and_writes_share_one_quota(): void
+    /**
+     * Two guarantees that cannot be separated: the write is refused on the
+     * quota the reads spent — one pool, not one per verb — and a refused write
+     * never lands, no matter how many times it is retried.
+     */
+    public function test_reads_and_writes_share_one_quota_and_a_refused_write_never_lands(): void
     {
         $limit = (int) config('kvstore.max_requests_per_minute');
         $this->exhaust('10.0.0.9', $limit);
-
-        $this->call('POST', '/object', [], [], [], [
-            'CONTENT_TYPE' => 'application/json',
-            'HTTP_ACCEPT' => 'application/json',
-            'REMOTE_ADDR' => '10.0.0.9',
-        ], '{"mykey":"value"}')->assertStatus(429);
-
-        $this->assertSame(0, KvEntry::count());
-    }
-
-    public function test_a_throttled_write_never_reaches_the_database(): void
-    {
-        $limit = (int) config('kvstore.max_requests_per_minute');
-        $this->exhaust('10.0.0.10', $limit);
 
         for ($i = 0; $i < 5; $i++) {
             $this->call('POST', '/object', [], [], [], [
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_ACCEPT' => 'application/json',
-                'REMOTE_ADDR' => '10.0.0.10',
+                'REMOTE_ADDR' => '10.0.0.9',
             ], '{"flood":"value"}')->assertStatus(429);
         }
 
