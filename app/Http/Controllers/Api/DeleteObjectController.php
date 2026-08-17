@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Repositories\EloquentKeyValueRepository;
 use Illuminate\Http\JsonResponse;
 
@@ -10,7 +9,7 @@ use Illuminate\Http\JsonResponse;
  * DELETE /object/{key}
  * Deletes every recorded version of the key.
  */
-class DeleteObjectController extends Controller
+class DeleteObjectController
 {
     public function __construct(
         private readonly EloquentKeyValueRepository $repository,

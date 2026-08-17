@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreObjectRequest;
 use App\Http\Resources\KvEntryResource;
 use App\Repositories\EloquentKeyValueRepository;
@@ -12,7 +11,7 @@ use Illuminate\Http\JsonResponse;
  * POST /object
  * Body: {"<key>": <value>}
  */
-class StoreObjectController extends Controller
+class StoreObjectController
 {
     public function __construct(
         private readonly EloquentKeyValueRepository $repository,

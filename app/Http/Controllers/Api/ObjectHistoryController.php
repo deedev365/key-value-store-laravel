@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Http\Resources\KvEntryResource;
 use App\Repositories\EloquentKeyValueRepository;
 use Illuminate\Http\JsonResponse;
@@ -11,7 +10,7 @@ use Illuminate\Http\JsonResponse;
  * GET /object/{key}/history
  * Every version ever recorded for the key, oldest first.
  */
-class ObjectHistoryController extends Controller
+class ObjectHistoryController
 {
     public function __construct(
         private readonly EloquentKeyValueRepository $repository,

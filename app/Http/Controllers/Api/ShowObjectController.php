@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Http\Requests\ShowObjectRequest;
 use App\Http\Resources\KvEntryResource;
 use App\Repositories\EloquentKeyValueRepository;
@@ -12,7 +11,7 @@ use Illuminate\Http\JsonResponse;
  * GET /object/{key}
  * GET /object/{key}?timestamp=<unix timestamp>
  */
-class ShowObjectController extends Controller
+class ShowObjectController
 {
     public function __construct(
         private readonly EloquentKeyValueRepository $repository,

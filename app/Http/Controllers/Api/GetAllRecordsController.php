@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Http\Resources\KvEntryResource;
 use App\Repositories\EloquentKeyValueRepository;
 use Illuminate\Http\JsonResponse;
@@ -12,7 +11,7 @@ use Illuminate\Http\JsonResponse;
  * GET /object/get_all_records/{page}
  * One page of the latest value of every key.
  */
-class GetAllRecordsController extends Controller
+class GetAllRecordsController
 {
     public function __construct(
         private readonly EloquentKeyValueRepository $repository,
