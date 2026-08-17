@@ -90,6 +90,79 @@ function formatFullUtc(unixSeconds) {
     return date.toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
 }
 
+// The wire formats of <input type="date"> and <input type="time">. Both are
+// fixed by the HTML spec regardless of how the picker displays them, so the
+// value can be read apart rather than parsed loosely.
+const DATE_VALUE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+// Hours and minutes only. The picker is stepped to the minute, so a value
+// carrying seconds did not come from it and is refused rather than silently
+// rounded into a schedule the editor never chose.
+const TIME_VALUE = /^(\d{2}):(\d{2})$/;
+
+/**
+ * The date and time fields as one UNIX timestamp, read as UTC.
+ *
+ * Date.UTC is what makes that true. Handing "2026-08-17T16:15" to the Date
+ * constructor instead would apply the browser's own offset, so the same form
+ * filled in by an editor in Bangkok and one in London would schedule two
+ * different instants — and neither would be the one the labels promise.
+ *
+ * Returns { unix } or { error }, so the caller decides how to report a refusal.
+ */
+function publishTimeFrom(dateValue, timeValue) {
+    const date = DATE_VALUE.exec(dateValue.trim());
+
+    if (date === null) {
+        return { error: 'Pick the date the item becomes active.' };
+    }
+
+    const time = TIME_VALUE.exec(timeValue.trim());
+
+    if (time === null) {
+        return { error: 'Pick the time the item becomes active.' };
+    }
+
+    const [year, month, day] = date.slice(1).map(Number);
+    const [hours, minutes] = time.slice(1).map(Number);
+
+    // Seconds are left at zero: a schedule is chosen to the minute, so the
+    // stored instant lands exactly on the minute the editor picked.
+    const ms = Date.UTC(year, month - 1, day, hours, minutes);
+
+    // Date.UTC rolls overflow forward rather than refusing it — the 31st of
+    // February silently becomes March. Reading the parts back is what catches a
+    // typed date the picker would never have produced.
+    const parsed = new Date(ms);
+
+    if (
+        parsed.getUTCFullYear() !== year
+        || parsed.getUTCMonth() !== month - 1
+        || parsed.getUTCDate() !== day
+        || parsed.getUTCHours() !== hours
+        || parsed.getUTCMinutes() !== minutes
+    ) {
+        return { error: 'That is not a real date and time.' };
+    }
+
+    return { unix: Math.floor(ms / MS_PER_SECOND) };
+}
+
+/**
+ * The same instant as formatFullUtc, but only as far as the minute — the
+ * pickers offer nothing finer, so echoing back a ":00" the editor cannot change
+ * would suggest a precision the form does not have.
+ */
+function formatUtcToMinute(unixSeconds) {
+    const date = new Date(unixSeconds * MS_PER_SECOND);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
+
 function clearFieldErrors(fields) {
     for (const field of fields) {
         field.classList.remove('field-error');
@@ -141,7 +214,27 @@ async function showResponse(el, res) {
 const PAGE_SIZE = 5;
 let currentPage = 1;
 
+// How long a rate-limited listing waits before asking again. Must match
+// kvstore.records_retry_seconds, which RecordsTableTest pins.
+const RECORDS_RETRY_SECONDS = 10;
+
+/**
+ * The pending re-request of a listing that was rate limited, so only one is
+ * ever outstanding — every entry to loadAllRecords cancels it, which is also
+ * what stops a manual Refresh from racing a scheduled retry.
+ */
+let recordsRetryTimer = null;
+
+function cancelRecordsRetry() {
+    if (recordsRetryTimer !== null) {
+        clearTimeout(recordsRetryTimer);
+        recordsRetryTimer = null;
+    }
+}
+
 async function loadAllRecords(page = currentPage) {
+    cancelRecordsRetry();
+
     const res = await fetch(api(`/get_all_records/${page}`));
     const data = await res.json().catch(() => null);
     const tbody = document.querySelector('#records-table tbody');
@@ -155,6 +248,20 @@ async function loadAllRecords(page = currentPage) {
         empty.textContent = throttleMessage(res, data)
             || messageFrom(data)
             || 'Could not load records.';
+
+        // Only the listing retries itself, and only on 429. It is a read, so
+        // asking again costs nothing but a request; the write handlers must
+        // never do this, since a retried POST in an append-only store would
+        // add a second version of the same value.
+        if (res.status === 429) {
+            empty.textContent += ` Retrying every ${RECORDS_RETRY_SECONDS} seconds…`;
+
+            recordsRetryTimer = setTimeout(
+                () => loadAllRecords(page),
+                RECORDS_RETRY_SECONDS * MS_PER_SECOND
+            );
+        }
+
         return;
     }
 
@@ -199,12 +306,42 @@ async function loadAllRecords(page = currentPage) {
 
 const writeKeyEl = document.getElementById('write-key');
 const writeValueEl = document.getElementById('write-value');
+const contentKeyEl = document.getElementById('content-key');
+const contentBodyEl = document.getElementById('content-body');
+const contentDateEl = document.getElementById('content-date');
+const contentTimeEl = document.getElementById('content-time');
 const lookupKeyEl = document.getElementById('lookup-key');
 const lookupResultEl = document.getElementById('lookup-result');
 
 // Clear the highlight as soon as the user starts fixing the field.
-for (const field of [writeKeyEl, writeValueEl, lookupKeyEl]) {
+for (const field of [writeKeyEl, writeValueEl, contentKeyEl, contentBodyEl, contentDateEl, contentTimeEl, lookupKeyEl]) {
     field.addEventListener('input', () => field.classList.remove('field-error'));
+}
+
+/**
+ * Echo the two pickers back as the instant and the timestamp they resolve to,
+ * so the editor sees what will be sent before anything is written — the pickers
+ * show a wall clock, and it is the number underneath that schedules the item.
+ */
+function refreshActiveTimePreview() {
+    const previewEl = document.getElementById('content-time-preview');
+    const both = contentDateEl.value !== '' && contentTimeEl.value !== '';
+
+    previewEl.hidden = !both;
+
+    if (!both) {
+        return;
+    }
+
+    const parsed = publishTimeFrom(contentDateEl.value, contentTimeEl.value);
+
+    previewEl.textContent = parsed.error
+        ? parsed.error
+        : `Active from ${formatUtcToMinute(parsed.unix)} — publish_time ${parsed.unix}`;
+}
+
+for (const field of [contentDateEl, contentTimeEl]) {
+    field.addEventListener('input', refreshActiveTimePreview);
 }
 
 /**
@@ -262,6 +399,59 @@ document.getElementById('write-btn').addEventListener('click', async () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [key]: parseValue(rawValue) }),
+    });
+    await showResponse(resultEl, res);
+    loadAllRecords(1);
+});
+
+document.getElementById('content-btn').addEventListener('click', async () => {
+    const key = contentKeyEl.value.trim();
+    const content = contentBodyEl.value;
+    const resultEl = document.getElementById('content-result');
+
+    clearFieldErrors([contentKeyEl, contentBodyEl, contentDateEl, contentTimeEl]);
+
+    if (key === '') {
+        rejectField(contentKeyEl, resultEl, 'Key is required.');
+        return;
+    }
+
+    if (!isValidKey(key)) {
+        rejectField(contentKeyEl, resultEl, 'Key may only contain letters, digits, underscores, hyphens and dots.');
+        return;
+    }
+
+    // Not trimmed, for the same reason the free-form value is not: what the
+    // editor typed is what the site will render.
+    if (content === '') {
+        rejectField(contentBodyEl, resultEl, 'Content is required.');
+        return;
+    }
+
+    if (contentDateEl.value === '') {
+        rejectField(contentDateEl, resultEl, 'Pick the date the item becomes active.');
+        return;
+    }
+
+    if (contentTimeEl.value === '') {
+        rejectField(contentTimeEl, resultEl, 'Pick the time the item becomes active.');
+        return;
+    }
+
+    const time = publishTimeFrom(contentDateEl.value, contentTimeEl.value);
+
+    if (time.error) {
+        rejectField(contentDateEl, resultEl, time.error);
+        return;
+    }
+
+    // The instant goes in the query string only. It used to be copied into the
+    // value as well, from the days before publish_time was a column; keeping
+    // both would store one moment twice with nothing keeping them in step.
+    const res = await fetch(`${api('')}?publish_time=${encodeURIComponent(time.unix)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: { message: content } }),
     });
     await showResponse(resultEl, res);
     loadAllRecords(1);

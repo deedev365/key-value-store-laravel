@@ -55,6 +55,42 @@ class RecordsTableTest extends TestCase
         );
     }
 
+    public function test_the_listing_retries_itself_on_the_configured_interval(): void
+    {
+        // A rate-limited table would otherwise sit empty until someone pressed
+        // Refresh, which reads as "the store is broken" rather than "wait".
+        $script = $this->script();
+
+        preg_match('/const RECORDS_RETRY_SECONDS = (\d+);/', $script, $m);
+
+        $this->assertNotEmpty($m, 'RECORDS_RETRY_SECONDS was not found in public/js/app.js');
+        $this->assertSame(
+            (int) config('kvstore.records_retry_seconds'),
+            (int) $m[1],
+            'the script and kvstore.records_retry_seconds disagree on the retry interval'
+        );
+
+        $this->assertStringContainsString('recordsRetryTimer = setTimeout(', $script);
+    }
+
+    public function test_only_a_429_schedules_a_retry(): void
+    {
+        // Any other failure is not going to fix itself, so retrying it would
+        // just repeat a broken request forever.
+        $this->assertStringContainsString('if (res.status === 429) {', $this->script());
+    }
+
+    public function test_a_refused_write_is_never_retried_automatically(): void
+    {
+        // Writes append, so a retried POST would store a second version of the
+        // same value. Only the listing — a read — may ask again by itself.
+        $this->assertSame(
+            1,
+            preg_match_all('/setTimeout\(/', $this->script()),
+            'something other than the listing retry schedules a timer'
+        );
+    }
+
     public function test_the_time_is_formatted_in_utc(): void
     {
         // Stored timestamps are UNIX seconds in UTC. Reading them with the

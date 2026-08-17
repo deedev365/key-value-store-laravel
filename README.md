@@ -11,6 +11,7 @@ the past".
 
 ## Contents
 
+- [The brief: scheduled publishing](#the-brief-scheduled-publishing)
 - [How it works](#how-it-works)
 - [API](#api)
 - [Getting started](#getting-started)
@@ -19,6 +20,139 @@ the past".
 - [Deployment](#deployment)
 - [Design decisions](#design-decisions)
 - [AI tool usage](#ai-tool-usage)
+
+## The brief: scheduled publishing
+
+### Business context
+
+The key-value store is now used to publish customer-facing travel content, such
+as:
+
+```
+route.bangkok-chiang-mai.banner
+operator.srt.booking_notice
+country.th.payment_message
+```
+
+Today, when an editor saves or adds a value, it becomes visible immediately.
+
+The content team needs to prepare campaigns and service notices ahead of time,
+then have them become visible automatically at a chosen UTC time.
+
+Review the existing implementation and propose the smallest safe change that
+supports this workflow. Before coding, clarify the expected behaviour, identify
+risks in the current design, and agree on an API and data model.
+
+**No background worker should be required for a scheduled value to become
+active.**
+
+### Worked example
+
+At 10:00 UTC, `route.bangkok-chiang-mai.banner` is
+`{"message":"Normal service"}`.
+
+At 11:00 UTC, an editor schedules `{"message":"Songkran timetable now
+available"}` to become active at 18:00 UTC.
+
+| Time (UTC) | A customer querying the key receives |
+| --- | --- |
+| 12:00 | `Normal service` |
+| 18:00 and later | `Songkran timetable now available` |
+
+Editors may schedule several future changes for the same key.
+
+### What was agreed
+
+**Data model** — one nullable column, `kv_entries.publish_time` (UTC unix
+seconds). `NULL` means "no schedule": live from the moment the row was written,
+which is what every row predating the column is and what a plain write stays.
+No other schema change; the existing `(key, recorded_at, id)` index still
+serves the reads.
+
+**API** — an optional query parameter on the existing write:
+
+```bash
+curl -X POST "/object?publish_time=1440569400" \
+  -H "Content-Type: application/json" \
+  -d '{"route.bangkok-chiang-mai.banner": {"message": "Songkran timetable now available"}}'
+```
+
+It rides in the query string because the request body is a single-property
+object whose *property name is the key* — a second property would break that
+invariant and make a key literally named `publish_time` unrepresentable.
+
+**No worker** — activation is a property of the read, not of a job. Every read
+compares `publish_time` against the clock on each request, so a version goes
+live on its own. There is nothing to schedule, nothing to deploy alongside the
+app, and nothing that can fall behind or double-fire.
+
+**Risks found in the original design**, all now closed:
+
+- `findLatest()` had no upper bound on `recorded_at`, so a future-stamped row
+  was visible *immediately* — the store already had a time dimension but only
+  one of its two reads used it.
+- The listing selected each key by `MAX(id)` while the single-key read ordered
+  by `recorded_at`: two different rules for "current", which agreed only while
+  the two columns moved together.
+- Filtering scheduled rows *after* the per-key grouping would have dropped the
+  whole key from the listing, hiding the version that was still live.
+- `?timestamp=` would otherwise have been a way to read an embargoed campaign
+  early; it now travels through `recorded_at` while `publish_time` is still
+  compared against the real clock.
+
+See [How it works](#how-it-works) for the mechanics and the
+[API](#api) section for each endpoint.
+
+### Selection rule: the acceptance cases
+
+A version is a candidate once its `publish_time` has passed, or if it has none
+at all. Among the candidates, **the one written last wins** — highest `id`, not
+the greatest publish time.
+
+Each row below lists one key's versions in the order they were written, and
+which of them a customer receives now. `null` means the version was saved with
+no schedule.
+
+| Versions written, in order | Clock | Current |
+| --- | --- | --- |
+| `(t1, t2)` | `t1 < now`, `t2 > now` | `t1` |
+| `(t1, t2)` | `t1 < now`, `t2 < now` | `t2` |
+| `(t1, t2, t3)` | `t1, t2 < now`, `t3 > now` | `t2` |
+| `(t1, t2, t3)` | `t1, t2, t3 < now` | `t3` |
+| `(null, t1, t2)` | `t1 > now`, `t2 > now` | `null` |
+| `(null, t1, t2)` | `t1 < now`, `t2 > now` | `t1` |
+| `(null, t1, t2)` | `t1 < now`, `t2 < now` | `t2` |
+| `(t1, null, t2)` | `t1 > now`, `t2 > now` | `null` |
+| `(t1, null, t2)` | `t1 < now`, `t2 > now` | `null` |
+| `(t1, null, t2)` | `t1 < now`, `t2 < now` | `t2` |
+| `(t1, t2, null)` | `t1 > now`, `t2 > now` | `null` |
+| `(t1, t2, null)` | `t1 < now`, `t2 > now` | `null` |
+| `(t1, t2, null)` | `t1 < now`, `t2 < now` | `null` |
+
+In every case `t1 < t2 < t3`.
+
+Three rows are what forces the rule to turn on `id` rather than on the publish
+time — the ones where a version saved with **no schedule** was written after a
+schedule that has already published:
+
+```
+(t1, null, t2)   t1 < now, t2 > now   -> null
+(t1, t2, null)   t1 < now, t2 > now   -> null
+(t1, t2, null)   t1 < now, t2 < now   -> null
+```
+
+Ordering by `MAX(publish_time)` would answer `t1`, `t1` and `t2` there. It
+satisfies the other ten rows, which is why the distinction is easy to miss:
+reverting the ordering to publish time leaves ten of the thirteen cases passing
+and breaks exactly these three.
+
+One correction to the original list: the third row above was written as
+expecting `t3`, but `t3 > now` there means that version has not been published
+yet, so it cannot be returned — the answer is `t2`.
+
+Every case is pinned as a data provider in
+[`PublishTimeSelectionTest`](tests/Unit/PublishTimeSelectionTest.php), asserted
+against `findLatest()` *and* `allLatest()` so the two reads cannot drift apart.
 
 ## How it works
 
@@ -31,8 +165,16 @@ timestamp T" are both just queries over that history:
   `recorded_at <= T`.
 
 This lives in a single table, `kv_entries`: `id`, `key`, `value` (JSON),
-`recorded_at` (unix timestamp), `created_at`/`updated_at`. It's indexed on
-`(key, recorded_at, id)`, which covers both lookup types directly.
+`recorded_at` (unix timestamp), `publish_time` (nullable unix timestamp),
+`created_at`/`updated_at`. It's indexed on `(key, recorded_at, id)`, which
+covers both lookup types directly.
+
+`recorded_at` is when a version was written; `publish_time` is when it becomes
+visible, and `NULL` there means "immediately". **Every** read honours it, so no
+endpoint can reveal a version another one is hiding — in particular
+`?timestamp=<future>` is not a way to read a campaign before it goes live,
+because that parameter moves `recorded_at` while `publish_time` is still
+compared against the real clock.
 
 Every query lives in
 [`EloquentKeyValueRepository`](app/Repositories/EloquentKeyValueRepository.php),
@@ -63,7 +205,7 @@ All endpoints are JSON in, JSON out, and live at the root — `/object`, not
 `/api/object`.
 
 Every `/object` route shares a rolling per-IP limit of
-`KV_MAX_REQUESTS_PER_MINUTE` (60) requests a minute. Responses advertise
+`KV_MAX_REQUESTS_PER_MINUTE` (120) requests a minute. Responses advertise
 `X-RateLimit-Limit` and `X-RateLimit-Remaining`; going over returns `429` with
 a `Retry-After` header and the seconds left in the body:
 
@@ -73,6 +215,13 @@ a `Retry-After` header and the seconds left in the body:
 
 The window is rolling, so a limit reached late in the minute clears in
 seconds — the count is what the caller is told to wait, not a flat 60.
+
+The limit is set with the front end in mind rather than at the lowest value a
+scraping guard would need: one save spends several requests, and the records
+table re-requests a rate-limited page every `KV_RECORDS_RETRY_SECONDS` (10)
+instead of sitting empty until someone presses Refresh. Only that listing
+retries itself, and only on `429` — a refused write is never repeated, since
+writes append and a retry would store the value twice.
 
 ### `POST /object`
 
@@ -108,7 +257,7 @@ first line of defence against genuinely large uploads.
 
 ### `GET /object/{key}`
 
-Returns the latest value for `key`.
+Returns the value that is live for `key` right now.
 
 ```bash
 curl /object/mykey
@@ -118,7 +267,28 @@ curl /object/mykey
 { "key": "mykey", "value": "value2", "timestamp": 1440569700 }
 ```
 
-`404` if the key has never been written.
+`404` if the key has never been written — **or if none of its versions has
+been published yet**. The two are deliberately the same answer: a distinct
+message would confirm that embargoed content exists under that name.
+
+Which version is live is decided by `publish_time`:
+
+- A version is a candidate once its `publish_time` has **passed**
+  (`publish_time < now`, so the named second itself is still pending), or if it
+  has none at all — `NULL` means live from the moment it was written.
+- Among the candidates, the one written **last** wins: highest `id`.
+
+That second rule is about write order, not publish order, and the two differ.
+Three versions written in this order — scheduled for noon, scheduled for 4pm,
+then saved with no schedule — resolve after 4pm to the *unscheduled* one,
+because it was saved last and so is the editor's most recent intent. A schedule
+set earlier never overrides a correction saved after it.
+
+For a key that has never been scheduled every `publish_time` is `NULL`, so this
+reduces to "the version written last", exactly as before the column existed.
+
+Nothing runs in the background: the query asks the clock per request, so a
+version goes live on its own with no worker, queue or cron involved.
 
 ### `GET /object/{key}?timestamp={unix}`
 
@@ -135,6 +305,12 @@ curl "/object/mykey?timestamp=1440569580"
 
 `404` if no version of the key existed yet at that timestamp. `422` if
 `timestamp` isn't a non-negative integer.
+
+Two clocks are at work here, deliberately. `{unix}` selects by `recorded_at`,
+answering the caller's question about a past moment, while `publish_time` is
+still compared against the **real** current time. So travelling forward shows
+what was current then among versions that are live now — a future timestamp
+cannot be used to read a scheduled campaign early.
 
 ### `GET /object/get_all_records`
 ### `GET /object/get_all_records/{page}`
@@ -164,11 +340,36 @@ not sliced in PHP, so serving page one does not hydrate the whole table into
 models first. Paging counts *keys*, not rows: a key written a hundred times
 still occupies one slot on one page.
 
+**Scheduled versions are withheld.** A version may carry a `publish_time`
+(UTC unix seconds); this listing returns it only once that second has arrived.
+A `publish_time` of `NULL` means there was no schedule to wait for, so the
+version is live from the moment it was written — which is what every row
+predating the column is, and what a plain `POST /object` still produces.
+
+The rule is applied per row, before the per-key grouping, so a key with a
+scheduled version does not vanish from the listing: it keeps showing whichever
+version is currently live, and switches to the scheduled one when its time
+comes. A key whose *only* version is still scheduled is absent altogether
+rather than present with an empty value.
+
+Nothing runs in the background to make this happen. The listing asks the clock
+on every request, so the same request simply answers differently after the
+publish time passes — there is no worker, queue or cron to promote a row, and
+none to fall behind.
+
+This listing picks each key's row by highest `id` among the published ones —
+the same rule `GET /object/{key}` applies, so the two cannot disagree about
+what is current for a key.
+
 ### `GET /object/{key}/history`
 
-Returns every version ever recorded for `key`, oldest first. An unknown key
+Returns every **published** version of `key`, oldest first. An unknown key
 returns an empty array rather than `404`, since this is a listing endpoint
 like `get_all_records`.
+
+A version whose `publish_time` has not passed is absent: the log is public, so
+listing a queued campaign here would announce it before its time. It joins the
+history on its own once that time passes.
 
 ```bash
 curl /object/mykey/history
