@@ -16,11 +16,11 @@ use stdClass;
  * than a request bag because middleware and Symfony's method override both
  * rewrite the decoded bag, and it decodes to stdClass rather than an
  * associative array so that a key of "0" is not misread as an array body.
- * The decode limit is $maxDepth + 2 — one level for the wrapping object, one
- * because json_decode's own limit counts the innermost scalar.
  */
 final class WriteBody
 {
+    private const DECODE_DEPTH_ALLOWANCE = 2;
+
     private function __construct(
         public readonly Key $key,
         public readonly mixed $value,
@@ -31,7 +31,7 @@ final class WriteBody
      */
     public static function fromJson(string $raw, int $maxDepth): self
     {
-        $decoded = json_decode($raw, false, $maxDepth + 2);
+        $decoded = json_decode($raw, false, $maxDepth + self::DECODE_DEPTH_ALLOWANCE);
 
         if (json_last_error() === JSON_ERROR_DEPTH) {
             throw InvalidBodyException::tooDeep($maxDepth);

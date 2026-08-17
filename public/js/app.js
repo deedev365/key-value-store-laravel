@@ -49,6 +49,9 @@ function messageFrom(data) {
     return data.message || fieldErrors[0] || null;
 }
 
+// The API records timestamps as UNIX seconds; Date works in milliseconds.
+const MS_PER_SECOND = 1000;
+
 /**
  * A stored timestamp as a readable clock time, e.g. 6:00pm.
  *
@@ -58,7 +61,7 @@ function messageFrom(data) {
  * reader is sitting.
  */
 function formatTime(unixSeconds) {
-    const date = new Date(unixSeconds * 1000);
+    const date = new Date(unixSeconds * MS_PER_SECOND);
 
     if (Number.isNaN(date.getTime())) {
         return '';
@@ -78,7 +81,7 @@ function formatTime(unixSeconds) {
  * tell yesterday's 6pm from today's.
  */
 function formatFullUtc(unixSeconds) {
-    const date = new Date(unixSeconds * 1000);
+    const date = new Date(unixSeconds * MS_PER_SECOND);
 
     if (Number.isNaN(date.getTime())) {
         return '';
@@ -99,6 +102,11 @@ function rejectField(field, resultEl, message) {
     showMessage(resultEl, message);
 }
 
+// What to wait when a refusal carries no retry_after to read. The API's
+// window is one minute, so a whole window is the safe guess — guessing short
+// would send the user straight back into the limit.
+const RATE_LIMIT_FALLBACK_SECONDS = 60;
+
 // The API allows a fixed number of requests per minute and answers 429
 // with the seconds left on the window, so say that plainly rather than
 // dumping the raw error at the user.
@@ -107,7 +115,7 @@ function throttleMessage(res, data) {
         return null;
     }
 
-    const wait = (data && data.retry_after) || 60;
+    const wait = (data && data.retry_after) || RATE_LIMIT_FALLBACK_SECONDS;
 
     return `Rate limit reached — too many requests. Try again in ${wait} second${wait === 1 ? '' : 's'}.`;
 }

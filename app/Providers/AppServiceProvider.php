@@ -23,6 +23,8 @@ use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
  */
 class AppServiceProvider extends ServiceProvider
 {
+    private const RATE_LIMIT_WINDOW_SECONDS = 60;
+
     public function register(): void {}
 
     public function boot(): void
@@ -38,7 +40,7 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute((int) config('kvstore.max_requests_per_minute'))
                 ->by($request->ip())
                 ->response(function (Request $request, array $headers) {
-                    $seconds = (int) ($headers['Retry-After'] ?? 60);
+                    $seconds = (int) ($headers['Retry-After'] ?? self::RATE_LIMIT_WINDOW_SECONDS);
 
                     return response()->json([
                         'message' => "Too many requests. Try again in {$seconds} second"
