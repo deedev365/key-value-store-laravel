@@ -48,7 +48,7 @@ Feature: Size and nesting limits on a write
     When I list all records
     Then the response status should be 200
     When I delete the key "k"
-    Then the response status should be 204
+    Then the response status should be 200
 
   Scenario: An oversized body still carries the security headers
     When I write a body of 200000 bytes

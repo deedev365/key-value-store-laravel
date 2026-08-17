@@ -104,7 +104,7 @@ class RequestLimitsTest extends TestCase
         $this->getJson('/object/k')->assertOk();
         $this->getJson('/object/k/history')->assertOk();
         $this->getJson('/object/get_all_records')->assertOk();
-        $this->deleteJson('/object/k')->assertNoContent();
+        $this->deleteJson('/object/k')->assertOk();
     }
 
     public function test_an_oversized_body_still_carries_the_security_headers(): void

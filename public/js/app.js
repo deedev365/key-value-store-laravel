@@ -302,8 +302,11 @@ async function deleteKey(key) {
     }
 
     const res = await fetch(api('/' + key), { method: 'DELETE' });
-    if (res.status === 204) {
-        showMessage(lookupResultEl, `Key "${key}" deleted.`);
+    if (res.ok) {
+        // A deletion is a sentence, not a record, so the API's own message is
+        // shown as one rather than as the object wrapping it.
+        const data = await res.json().catch(() => null);
+        showMessage(lookupResultEl, messageFrom(data) || `Key "${key}" deleted.`);
     } else {
         await showResponse(lookupResultEl, res);
     }

@@ -18,7 +18,9 @@ class RemoveKeyObjectTest extends TestCase
         KvEntry::create(['key' => 'mykey', 'value' => 'value1', 'recorded_at' => 1000]);
         KvEntry::create(['key' => 'mykey', 'value' => 'value2', 'recorded_at' => 2000]);
 
-        $this->deleteJson('/object/mykey')->assertNoContent();
+        $this->deleteJson('/object/mykey')
+            ->assertOk()
+            ->assertJson(['message' => "Key 'mykey' and all its versions were deleted."]);
 
         $this->assertSame(0, KvEntry::where('key', 'mykey')->count());
         $this->getJson('/object/mykey')->assertNotFound();

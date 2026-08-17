@@ -189,7 +189,11 @@ Deletes every recorded version of `key`.
 curl -X DELETE /object/mykey
 ```
 
-`204 No Content` on success. `404` if the key has never been written.
+```json
+{ "message": "Key 'mykey' and all its versions were deleted." }
+```
+
+`200 OK` on success. `404` if the key has never been written.
 
 ## Getting started
 

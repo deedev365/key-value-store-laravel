@@ -6,8 +6,8 @@ Feature: Removing a key
     Given the key "mykey" has the value "value1" recorded at 1000
     And the key "mykey" has the value "value2" recorded at 2000
     When I delete the key "mykey"
-    Then the response status should be 204
-    And the response body should be empty
+    Then the response status should be 200
+    And the response message should be "Key 'mykey' and all its versions were deleted."
     And the key "mykey" should have 0 versions
     When I read the key "mykey"
     Then the response status should be 404

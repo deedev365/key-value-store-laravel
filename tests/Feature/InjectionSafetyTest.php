@@ -389,14 +389,19 @@ class InjectionSafetyTest extends TestCase
             ->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 
-    public function test_a_204_delete_keeps_an_empty_body(): void
+    public function test_a_delete_confirmation_cannot_carry_markup_from_the_key(): void
     {
-        // The JSON re-encoding must not resurrect a body on a 204.
+        // The success body names the key, so it needs the guarantee the 404
+        // body already has: the route charset is what keeps markup out, and
+        // the response is still marked unsniffable.
         $this->postJson('/object', ['mykey' => 'value']);
 
-        $this->deleteJson('/object/mykey')
-            ->assertNoContent()
-            ->assertHeader('X-Content-Type-Options', 'nosniff');
+        $body = $this->deleteJson('/object/mykey')
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->getContent();
+
+        $this->assertStringNotContainsString('<', $body);
     }
 
     public function test_a_404_message_cannot_carry_markup_from_the_key(): void

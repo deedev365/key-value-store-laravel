@@ -263,13 +263,14 @@ Feature: Hostile input on every entry point
     Then the response status should be 422
     And the response header "X-Content-Type-Options" should be "nosniff"
 
-  Scenario: A 204 delete keeps an empty body
-    The JSON re-encoding must not resurrect a body on a 204.
+  Scenario: A delete confirmation cannot carry markup from the key
+    The success body names the key, so the route charset is what keeps markup
+    out of it.
 
     Given the value "value" is stored under the key "mykey"
     When I delete the key "mykey"
-    Then the response status should be 204
-    And the response body should be empty
+    Then the response status should be 200
+    And the response body should not contain "<"
     And the response header "X-Content-Type-Options" should be "nosniff"
 
   Scenario: A 404 message cannot carry markup from the key

@@ -23,6 +23,8 @@ class DeleteObjectController
             ], 404);
         }
 
-        return response()->json(null, 204);
+        return response()->json([
+            'message' => "Key '{$key}' and all its versions were deleted.",
+        ]);
     }
 }
