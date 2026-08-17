@@ -10,25 +10,20 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Stored values are attacker-controlled and may contain markup, so responses
  * are hardened twice over: the browser is told never to sniff a content type
- * out of the body, and JSON bodies are encoded with '<', '>', '&', '"' and
- * "'" escaped to their \uXXXX forms. Either measure alone would do; together
- * a stored <script> payload cannot be rendered as markup even if the response
- * is served or embedded somewhere unexpected.
+ * out of the body, and JSON bodies escape '<', '>', '&', '"' and "'" to their
+ * \uXXXX forms. Either alone would do; together a stored <script> payload
+ * cannot be rendered as markup even if the response is embedded somewhere
+ * unexpected.
+ *
+ * The CSP denies by default and opens only what the page uses. There is no
+ * 'unsafe-inline' anywhere — the stylesheet and script were moved out of the
+ * Blade template into public/ precisely so an injected <script>, inline by
+ * definition, will not run.
  */
 class SecurityHeaders
 {
     private const JSON_ESCAPES = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
-    /**
-     * Deny by default, then open only what the page actually uses. There is no
-     * 'unsafe-inline' anywhere, which is the whole point: the stylesheet and
-     * script were moved out of the Blade template into public/ so that an
-     * injected <script> — inline by definition — simply will not run.
-     *
-     * base-uri blocks a <base> tag from rewriting the relative script URL,
-     * form-action leaves nothing to submit to, and frame-ancestors is the
-     * modern form of the X-Frame-Options above.
-     */
     private const CONTENT_SECURITY_POLICY = [
         "default-src 'none'",
         "script-src 'self'",
@@ -52,7 +47,6 @@ class SecurityHeaders
             implode('; ', self::CONTENT_SECURITY_POLICY)
         );
 
-        // isEmpty() covers 204/304, whose bodies must stay absent.
         if ($response instanceof JsonResponse && ! $response->isEmpty()) {
             $response->setEncodingOptions($response->getEncodingOptions() | self::JSON_ESCAPES);
         }

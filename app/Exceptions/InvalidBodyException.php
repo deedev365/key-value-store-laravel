@@ -39,11 +39,6 @@ final class InvalidBodyException extends InvalidArgumentException
         return new self('body', 'Request body must contain exactly one key-value pair, e.g. {"mykey": "value1"}.');
     }
 
-    /**
-     * The envelope was well formed, but its property name is not a usable key.
-     * The reason is Key's, so it is passed through verbatim rather than
-     * restated here.
-     */
     public static function invalidKey(InvalidKeyException $reason): self
     {
         return new self('key', $reason->getMessage(), $reason);

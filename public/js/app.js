@@ -130,7 +130,7 @@ async function showResponse(el, res) {
     return data;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 let currentPage = 1;
 
 async function loadAllRecords(page = currentPage) {

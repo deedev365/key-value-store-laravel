@@ -42,7 +42,7 @@ return [
     |
     */
 
-    'records_per_page' => (int) env('KV_RECORDS_PER_PAGE', 10),
+    'records_per_page' => (int) env('KV_RECORDS_PER_PAGE', 5),
 
     /*
     |--------------------------------------------------------------------------

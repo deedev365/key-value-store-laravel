@@ -50,18 +50,18 @@ class RecordsPaginationTest extends TestCase
         return array_column($this->getJson($uri)->assertOk()->json(), 'key');
     }
 
-    public function test_the_default_page_size_is_ten(): void
+    public function test_the_default_page_size_is_five(): void
     {
-        $this->assertSame(10, $this->pageSize());
+        $this->assertSame(5, $this->pageSize());
     }
 
-    public function test_a_full_page_returns_exactly_ten_records(): void
+    public function test_a_full_page_returns_exactly_five_records(): void
     {
         $this->seedKeys(25);
 
         $this->getJson('/object/get_all_records')
             ->assertOk()
-            ->assertJsonCount(10);
+            ->assertJsonCount(5);
     }
 
     public function test_fewer_records_than_a_page_returns_them_all(): void
@@ -75,9 +75,9 @@ class RecordsPaginationTest extends TestCase
 
     public function test_exactly_one_page_of_records_does_not_spill(): void
     {
-        $this->seedKeys(10);
+        $this->seedKeys(5);
 
-        $this->assertCount(10, $this->keysOnPage(1));
+        $this->assertCount(5, $this->keysOnPage(1));
         $this->assertSame([], $this->keysOnPage(2));
     }
 
@@ -86,37 +86,45 @@ class RecordsPaginationTest extends TestCase
         $this->seedKeys(25);
 
         $this->assertSame('key_001', $this->keysOnPage(1)[0]);
-        $this->assertSame('key_010', $this->keysOnPage(1)[9]);
-        $this->assertSame('key_011', $this->keysOnPage(2)[0]);
-        $this->assertSame('key_020', $this->keysOnPage(2)[9]);
+        $this->assertSame('key_005', $this->keysOnPage(1)[4]);
+        $this->assertSame('key_006', $this->keysOnPage(2)[0]);
+        $this->assertSame('key_010', $this->keysOnPage(2)[4]);
     }
 
     public function test_the_last_page_holds_the_remainder(): void
     {
-        $this->seedKeys(25);
+        // 23 rather than 25: a store that divides evenly into pages would
+        // never exercise a partial last page.
+        $this->seedKeys(23);
 
-        $this->getJson('/object/get_all_records/3')
+        $this->getJson('/object/get_all_records/5')
             ->assertOk()
-            ->assertJsonCount(5);
+            ->assertJsonCount(3);
     }
 
     public function test_paging_covers_every_key_exactly_once(): void
     {
-        $this->seedKeys(25);
+        $this->seedKeys(23);
 
-        $seen = array_merge($this->keysOnPage(1), $this->keysOnPage(2), $this->keysOnPage(3));
+        $seen = array_merge(
+            $this->keysOnPage(1),
+            $this->keysOnPage(2),
+            $this->keysOnPage(3),
+            $this->keysOnPage(4),
+            $this->keysOnPage(5),
+        );
 
-        $this->assertCount(25, $seen);
+        $this->assertCount(23, $seen);
         $this->assertSame($seen, array_unique($seen), 'a key appeared on two pages');
         $this->assertSame('key_001', $seen[0]);
-        $this->assertSame('key_025', $seen[24]);
+        $this->assertSame('key_023', $seen[22]);
     }
 
     public function test_a_page_past_the_end_is_an_empty_array(): void
     {
         $this->seedKeys(25);
 
-        $this->getJson('/object/get_all_records/4')->assertOk()->assertExactJson([]);
+        $this->getJson('/object/get_all_records/6')->assertOk()->assertExactJson([]);
         $this->getJson('/object/get_all_records/9999')->assertOk()->assertExactJson([]);
     }
 
@@ -126,6 +134,7 @@ class RecordsPaginationTest extends TestCase
 
         $this->assertSame($this->keysOnPage(1), $this->keysOnPage());
         $this->assertSame($this->keysOnPage(1), $this->keysOnPage(0));
+        $this->assertCount(5, $this->keysOnPage(1));
     }
 
     public function test_an_empty_store_returns_an_empty_array_on_any_page(): void
@@ -136,7 +145,7 @@ class RecordsPaginationTest extends TestCase
 
     public function test_pages_hold_keys_not_versions(): void
     {
-        // 30 writes across 12 keys is 12 records, so page 2 has 2 of them —
+        // 36 writes across 12 keys is 12 records, so page 3 has 2 of them —
         // paging must count keys, not rows.
         foreach (range(1, 12) as $i) {
             foreach (range(1, 3) as $version) {
@@ -148,10 +157,10 @@ class RecordsPaginationTest extends TestCase
             }
         }
 
-        $this->assertCount(10, $this->keysOnPage(1));
-        $this->assertCount(2, $this->keysOnPage(2));
+        $this->assertCount(5, $this->keysOnPage(1));
+        $this->assertCount(2, $this->keysOnPage(3));
 
-        $this->getJson('/object/get_all_records/2')
+        $this->getJson('/object/get_all_records/3')
             ->assertOk()
             ->assertJsonFragment(['key' => 'key_012', 'value' => 'v3'])
             ->assertJsonMissing(['value' => 'v1']);
@@ -186,9 +195,10 @@ class RecordsPaginationTest extends TestCase
 
     public function test_the_frontend_page_size_matches_the_server(): void
     {
-        // These drifted once: the server was cut to 5 while the page still
-        // expected 10, which left "Next" permanently disabled because the
-        // script only enables it when a full page comes back.
+        // These drifted once: the server's page size was changed while the
+        // page still expected the old one, which left "Next" permanently
+        // disabled because the script only enables it when a full page
+        // comes back.
         $script = file_get_contents(public_path('js/app.js'));
 
         preg_match('/const PAGE_SIZE = (\d+);/', $script, $m);

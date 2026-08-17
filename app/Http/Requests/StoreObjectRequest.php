@@ -8,13 +8,11 @@ use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * The API's write contract is a single-property JSON object where the property
+ * The API's write contract is a single-property JSON object whose property
  * name is the storage key, e.g. {"mykey": "value1"} — the key is not a fixed
- * field name, so standard rule-based validation doesn't apply.
- *
- * Validation is therefore construction: WriteBody either parses the body or
- * says why it could not, and this class does nothing but translate that answer
- * into the validator's vocabulary.
+ * field name, so rule-based validation does not apply. Validation is instead
+ * construction: WriteBody either parses the body or says why it could not,
+ * and this class only translates that answer into the validator's vocabulary.
  */
 class StoreObjectRequest extends FormRequest
 {
@@ -44,11 +42,6 @@ class StoreObjectRequest extends FormRequest
         });
     }
 
-    /**
-     * The parsed body. Reached only once validation has passed, since that is
-     * the only path on which the handler runs, so the memoised instance from
-     * withValidator() is what comes back.
-     */
     public function body(): WriteBody
     {
         return $this->parsed ??= $this->parse();

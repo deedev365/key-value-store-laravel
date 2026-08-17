@@ -26,10 +26,6 @@ class ShowObjectRequest extends FormRequest
         ];
     }
 
-    /**
-     * The requested point in time, or null when the caller asked for the
-     * current value.
-     */
     public function timestamp(): ?int
     {
         if (! $this->has('timestamp')) {

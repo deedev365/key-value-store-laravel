@@ -10,10 +10,14 @@ use stdClass;
  * The body of a write: a single-property JSON object whose property name is
  * the storage key, e.g. {"mykey": "value1"}.
  *
- * Parsing and validating are the same act here. A WriteBody exists only if the
+ * Parsing and validating are the same act — a WriteBody exists only if the
  * raw body was a well-formed envelope carrying a usable key, so nothing
- * downstream re-checks the shape or digs the key back out of an array — the
- * request handler receives a typed key and a value, and that is all it needs.
+ * downstream re-checks the shape. It is built from the raw content rather
+ * than a request bag because middleware and Symfony's method override both
+ * rewrite the decoded bag, and it decodes to stdClass rather than an
+ * associative array so that a key of "0" is not misread as an array body.
+ * The decode limit is $maxDepth + 2 — one level for the wrapping object, one
+ * because json_decode's own limit counts the innermost scalar.
  */
 final class WriteBody
 {
@@ -23,30 +27,10 @@ final class WriteBody
     ) {}
 
     /**
-     * Build from the raw request content.
-     *
-     * The raw content is the right input, rather than a decoded request bag:
-     * Laravel copies a decoded JSON body into the Symfony request bag, where
-     * global middleware rewrites it and Symfony's method override reads from
-     * it, so only the raw content is exactly what the client sent.
-     *
      * @throws InvalidBodyException
      */
     public static function fromJson(string $raw, int $maxDepth): self
     {
-        // json_decode needs depth $maxDepth + 2 to accept a value nested
-        // $maxDepth levels inside the wrapping single-property object: one
-        // level for the object, and one more because its own limit counts the
-        // innermost scalar. Decoding with the limit, rather than walking the
-        // result afterwards, means an over-deep body is never materialised in
-        // the first place.
-        //
-        // Decoding to stdClass rather than to an associative array is what
-        // makes the object/array distinction reliable: json_decode($raw, true)
-        // turns both {"0":"a"} and ["a"] into [0 => 'a'], so a key of "0"
-        // would otherwise be misread as an array body and rejected. Nested
-        // values keep their JSON shape for the same reason — an associative
-        // decode would re-encode {"0":"a","1":"b"} as the array ["a","b"].
         $decoded = json_decode($raw, false, $maxDepth + 2);
 
         if (json_last_error() === JSON_ERROR_DEPTH) {

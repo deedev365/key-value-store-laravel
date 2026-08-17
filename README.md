@@ -140,7 +140,7 @@ curl "/object/mykey?timestamp=1440569580"
 ### `GET /object/get_all_records/{page}`
 
 Returns a JSON array with the latest version of every key currently in the
-store, ordered by key, `KV_RECORDS_PER_PAGE` (10) at a time.
+store, ordered by key, `KV_RECORDS_PER_PAGE` (5) at a time.
 
 ```bash
 curl /object/get_all_records

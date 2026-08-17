@@ -2,22 +2,25 @@
 
 namespace App\Models;
 
-use App\Casts\AsKey;
-use App\ValueObjects\Key;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 /**
- * A single immutable version of a key's value. Rows are never updated or
- * deleted by the API — a write always inserts a new row, which is what
- * makes the store "version-controlled".
+ * A single immutable version of a key's value. The API never updates or
+ * deletes a row — a write always inserts a new one, which is what makes the
+ * store "version-controlled".
  *
- * $value is declared as mixed rather than left to the cast: 'object' decodes
- * with json_decode($json, false), which yields whatever JSON type was stored —
- * a string, a number, a bool, a list or a stdClass — not a stdClass every time.
+ * The properties below are what the model hands out, not the column types:
+ * `value` is a json column cast to 'object', so it comes back as whatever
+ * JSON type was stored, and 'object' rather than 'array' is what keeps
+ * {"0":"a","1":"b"} from decoding into the list ["a","b"].
  *
- * @property Key $key
+ * @property int $id
+ * @property string $key
  * @property mixed $value
  * @property int $recorded_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 class KvEntry extends Model
 {
@@ -29,14 +32,7 @@ class KvEntry extends Model
         'recorded_at',
     ];
 
-    /**
-     * 'object' rather than 'array': an associative decode collapses a JSON
-     * object with consecutive numeric properties into a PHP list, so
-     * {"0":"a","1":"b"} would come back out as ["a","b"]. Decoding to stdClass
-     * keeps objects and arrays distinct on the way back.
-     */
     protected $casts = [
-        'key' => AsKey::class,
         'value' => 'object',
         'recorded_at' => 'integer',
     ];

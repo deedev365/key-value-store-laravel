@@ -3,7 +3,6 @@
 namespace Tests\Unit;
 
 use App\Models\KvEntry;
-use App\ValueObjects\Key;
 use Illuminate\Support\Collection;
 
 /**
@@ -14,18 +13,14 @@ use Illuminate\Support\Collection;
 class GetAllRecordsRepositoryTest extends RepositoryTestCase
 {
     /**
-     * The keys of a page, as plain strings. The model casts `key` to a Key
-     * value object, and these assertions are about which keys came back in
-     * which order, not about the object wrapping them.
+     * The keys of a page, in the order the repository returned them.
      *
      * @param  Collection<int, KvEntry>  $entries
      * @return list<string>
      */
     private function keysOf(Collection $entries): array
     {
-        return $entries->pluck('key')
-            ->map(fn (Key $key): string => $key->value)
-            ->all();
+        return $entries->pluck('key')->all();
     }
 
     public function test_all_latest_returns_one_row_per_key(): void

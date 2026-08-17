@@ -7,55 +7,35 @@ use JsonSerializable;
 use Stringable;
 
 /**
- * A storage key: an opaque, non-empty identifier of a limited character set.
+ * A storage key: an opaque, non-empty identifier of a limited character set,
+ * and the single authority on what that set is — routes take PATTERN, the
+ * write path goes through fromString(), and app.js is pinned to REGEX by a
+ * test, so the three cannot drift apart. PATTERN is unanchored because
+ * Route::where() anchors it itself; REGEX is the anchored form.
  *
- * What a valid key is used to be stated in three places at once — the route
- * constraint, the write validator and the front end — so a change to the
- * character set could land in one and not the others, and the two would then
- * disagree silently: the route would 404 a key the validator had accepted.
- * This class is the single authority. Routes take PATTERN, the write
- * validator goes through fromString(), and app.js is pinned to the same
- * expression by a test.
- *
- * Instances are immutable and always valid: the constructor is private, so
- * the only ways in are the named constructors below, and each one states
- * which guarantee it gives.
+ * Instances are immutable and always valid: the constructor is private, and
+ * each named constructor states which guarantee it gives. fromString() is for
+ * untrusted input and refuses anything invalid, including the RESERVED keys a
+ * literal route would otherwise swallow. fromStorage() skips validation on
+ * purpose — a stored row was checked on the way in, and re-checking it would
+ * make existing rows unreadable the day the rules are tightened.
  */
 final class Key implements JsonSerializable, Stringable
 {
-    /**
-     * Deliberately unanchored: Route::where() drops the expression into the
-     * middle of the compiled route regex and anchors it there, so anchors in
-     * this constant would be doubled. The anchored form is REGEX, below.
-     */
     public const PATTERN = '[A-Za-z0-9_.-]+';
 
     public const MAX_LENGTH = 255;
 
     /**
-     * Keys the API cannot serve back, because a literal route claims the same
-     * path segment (see routes/api.php). A key stored under one of these would
-     * be written happily and then read as something else entirely — GET
-     * /object/get_all_records is the listing, not that key's value — so the
-     * write is refused rather than left silently unreadable.
-     *
      * @var list<string>
      */
     public const RESERVED = ['get_all_records'];
 
-    /**
-     * The anchored form, for matching a whole string rather than a route
-     * segment. Public because the front-end contract test asserts that
-     * app.js validates against this exact expression.
-     */
     public const REGEX = '/^'.self::PATTERN.'$/';
 
     private function __construct(public readonly string $value) {}
 
     /**
-     * Build a key from untrusted input — a request body, a query string —
-     * refusing anything that is not a valid key.
-     *
      * @throws InvalidKeyException
      */
     public static function fromString(string $value): self
@@ -79,10 +59,6 @@ final class Key implements JsonSerializable, Stringable
         return new self($value);
     }
 
-    /**
-     * The same, but answering with null instead of throwing, for the callers
-     * that treat an invalid key as an ordinary outcome rather than an error.
-     */
     public static function tryFrom(string $value): ?self
     {
         try {
@@ -92,15 +68,6 @@ final class Key implements JsonSerializable, Stringable
         }
     }
 
-    /**
-     * Rebuild a key from a value that is already in the database.
-     *
-     * Validation is skipped on purpose. A stored row was checked on the way
-     * in, and re-checking it on every read would mean that tightening the
-     * rules later makes existing rows unreadable — the table would start
-     * throwing on data it had accepted years earlier. Reads must not fail
-     * because policy moved.
-     */
     public static function fromStorage(string $value): self
     {
         return new self($value);

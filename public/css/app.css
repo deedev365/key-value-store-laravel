@@ -92,8 +92,5 @@ th { color: #706f6c; font-weight: 600; }
 .muted { color: #706f6c; font-size: 0.85rem; }
 .actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
 
-/* Right-aligned refresh control in the "All records" heading. */
 .heading-action { float: right; }
-
-/* Pagination row: Prev / indicator / Next. */
 .actions.pager { justify-content: space-between; align-items: center; }
