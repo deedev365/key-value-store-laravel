@@ -35,6 +35,48 @@
         <pre id="write-result" class="muted" hidden></pre>
     </section>
 
+    {{--
+        A second writer for the content records the travel site reads, which are
+        always an object carrying one message. It posts to the same POST /object
+        as the free-form form above — the value it builds just happens to have a
+        fixed shape, and the activation moment rides in the query string rather
+        than in the value, since publish_time is a column of its own.
+    --}}
+    <section>
+        <h2>Add a content item</h2>
+        <p class="muted">Stores <code>{"message": "..."}</code> under one key.</p>
+        <div class="row">
+            <div>
+                <label for="content-key">Key name</label>
+                <input id="content-key" type="text" placeholder="route.bangkok-chiang-mai.banner" pattern="[A-Za-z0-9_.\-]+" maxlength="255" required>
+            </div>
+            <div>
+                <label for="content-body">Content</label>
+                <input id="content-body" type="text" placeholder="Put your message" required>
+            </div>
+        </div>
+        {{--
+            A date picker and a clock, rather than one datetime-local control:
+            datetime-local yields a single local wall-clock string, and the two
+            fields are read as UTC here — the zone the store and every other
+            reading on this page use. The labels say so, and the line under them
+            echoes the instant back before anything is written.
+        --}}
+        <div class="row">
+            <div>
+                <label for="content-date">Active from — date (UTC)</label>
+                <input id="content-date" type="date" required>
+            </div>
+            <div>
+                <label for="content-time">Active from — time (UTC)</label>
+                <input id="content-time" type="time" step="60" required>
+            </div>
+        </div>
+        <p id="content-time-preview" class="muted" hidden></p>
+        <button id="content-btn">Save</button>
+        <pre id="content-result" class="muted" hidden></pre>
+    </section>
+
     <section>
         <h2>Look up by key</h2>
         <div class="row">
