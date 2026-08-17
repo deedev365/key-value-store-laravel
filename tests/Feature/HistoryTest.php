@@ -35,4 +35,49 @@ class HistoryTest extends TestCase
             ->assertOk()
             ->assertExactJson([]);
     }
+
+    // ---------------------------------------------------------------
+    // publish_time
+    // ---------------------------------------------------------------
+
+    public function test_history_omits_a_version_that_is_still_scheduled(): void
+    {
+        // The log is public, so a queued campaign listed here would be
+        // announced before its time.
+        $key = 'route.bangkok-chiang-mai.banner';
+
+        KvEntry::create(['key' => $key, 'value' => 'current banner', 'recorded_at' => now()->timestamp - 100]);
+        KvEntry::create([
+            'key' => $key,
+            'value' => 'campaign banner',
+            'recorded_at' => now()->timestamp,
+            'publish_time' => now()->timestamp + 3600,
+        ]);
+
+        $this->getJson('/object/'.$key.'/history')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment(['value' => 'current banner'])
+            ->assertJsonMissing(['value' => 'campaign banner']);
+    }
+
+    public function test_history_includes_the_version_once_its_time_has_passed(): void
+    {
+        $key = 'route.bangkok-chiang-mai.banner';
+
+        KvEntry::create(['key' => $key, 'value' => 'current banner', 'recorded_at' => now()->timestamp - 100]);
+        KvEntry::create([
+            'key' => $key,
+            'value' => 'campaign banner',
+            'recorded_at' => now()->timestamp,
+            'publish_time' => now()->timestamp + 3600,
+        ]);
+
+        $this->travelTo(now()->addSeconds(3601));
+
+        $this->getJson('/object/'.$key.'/history')
+            ->assertOk()
+            ->assertJsonCount(2)
+            ->assertJsonFragment(['value' => 'campaign banner']);
+    }
 }

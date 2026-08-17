@@ -14,6 +14,7 @@ use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Assert;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -72,6 +73,10 @@ class ApiContext implements Context
     #[BeforeScenario]
     public function bootTheApplication(): void
     {
+        // Carbon's test time is global and outlives the application, so a
+        // scenario that pinned the clock must not leave it pinned for the next.
+        Carbon::setTestNow();
+
         foreach (self::ENVIRONMENT as $key => $value) {
             $_ENV[$key] = $value;
             $_SERVER[$key] = $value;
@@ -124,6 +129,32 @@ class ApiContext implements Context
             'value' => $value,
             'recorded_at' => $timestamp,
         ]);
+    }
+
+    /**
+     * A version with an activation time. No write path sets one yet, so like
+     * the step above this writes straight to the table.
+     */
+    #[Given('the key :key has the value :value recorded at :recordedAt and published at :publishTime')]
+    public function theKeyHasTheValueRecordedAtAndPublishedAt(string $key, string $value, int $recordedAt, int $publishTime): void
+    {
+        KvEntry::create([
+            'key' => $key,
+            'value' => $value,
+            'recorded_at' => $recordedAt,
+            'publish_time' => $publishTime,
+        ]);
+    }
+
+    /**
+     * Pins the clock the listing compares publish times against. Cleared
+     * before every scenario, since Carbon's test time is global.
+     */
+    #[Given('the clock is at :timestamp')]
+    #[When('the clock reaches :timestamp')]
+    public function theClockIsAt(int $timestamp): void
+    {
+        Carbon::setTestNow(Carbon::createFromTimestampUTC($timestamp));
     }
 
     #[Given('the last version of the key :key was recorded at :timestamp')]

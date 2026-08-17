@@ -15,10 +15,15 @@ use Illuminate\Support\Carbon;
  * JSON type was stored, and 'object' rather than 'array' is what keeps
  * {"0":"a","1":"b"} from decoding into the list ["a","b"].
  *
+ * `publish_time` is UNIX seconds like `recorded_at`, and null there is a
+ * meaning rather than a gap: no schedule, so the version is live from the
+ * moment it was written.
+ *
  * @property int $id
  * @property string $key
  * @property mixed $value
  * @property int $recorded_at
+ * @property int|null $publish_time
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -30,10 +35,12 @@ class KvEntry extends Model
         'key',
         'value',
         'recorded_at',
+        'publish_time',
     ];
 
     protected $casts = [
         'value' => 'object',
         'recorded_at' => 'integer',
+        'publish_time' => 'integer',
     ];
 }

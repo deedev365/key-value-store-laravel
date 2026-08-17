@@ -28,6 +28,11 @@ class KvEntryResource extends JsonResource
             'key' => $entry->key,
             'value' => $entry->value,
             'timestamp' => $entry->recorded_at,
+
+            // Only present when the version carries a schedule, so an
+            // unscheduled record renders exactly as it did before scheduling
+            // existed — an always-present null would change every response.
+            'publish_time' => $this->whenNotNull($entry->publish_time),
         ];
     }
 }

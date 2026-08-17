@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\KvEntry;
 use App\Repositories\EloquentKeyValueRepository;
 use App\ValueObjects\Key;
 use Illuminate\Database\Seeder;
@@ -49,7 +50,10 @@ class KvEntrySeeder extends Seeder
         foreach (self::RECORDS as $name => $counts) {
             $key = Key::fromString($name);
 
-            if ($repository->findLatest($key->value) !== null) {
+            // Counted rather than read back: a read returns only published
+            // versions, so a key holding nothing but a future schedule would
+            // look absent and be seeded a second time.
+            if (KvEntry::where('key', $key->value)->exists()) {
                 continue;
             }
 
