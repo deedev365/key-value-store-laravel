@@ -17,5 +17,6 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(KvEntrySeeder::class);
+        $this->call(TravelContentSeeder::class);
     }
 }
