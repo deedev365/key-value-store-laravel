@@ -18,6 +18,21 @@ class RateLimitTest extends TestCase
     use RefreshDatabase;
 
     /**
+     * The limit these tests spend, pinned rather than taken from the shipped
+     * default. The tests are about the limiter honouring whatever it is
+     * configured with, so they should not get slower — or start meaning
+     * something slightly different — every time the default is raised.
+     */
+    private const LIMIT = 60;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['kvstore.max_requests_per_minute' => self::LIMIT]);
+    }
+
+    /**
      * @return TestResponse<Response>
      */
     private function getFrom(string $ip, string $uri = '/object/get_all_records'): TestResponse

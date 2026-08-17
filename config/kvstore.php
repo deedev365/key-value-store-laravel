@@ -54,8 +54,27 @@ return [
     | defined in AppServiceProvider; Laravel does not throttle API routes on
     | its own.
     |
+    | Set with the front end in mind: a single save spends several requests
+    | (the write, then a reload of the listing), and a rate-limited listing
+    | retries itself every KV_RECORDS_RETRY_SECONDS, so a browsing editor needs
+    | more headroom than the guard against scraping strictly requires.
+    |
     */
 
-    'max_requests_per_minute' => (int) env('KV_MAX_REQUESTS_PER_MINUTE', 60),
+    'max_requests_per_minute' => (int) env('KV_MAX_REQUESTS_PER_MINUTE', 120),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Listing retry interval
+    |--------------------------------------------------------------------------
+    |
+    | How long the records table waits before re-requesting a page that came
+    | back 429. The table would otherwise sit empty until the reader pressed
+    | Refresh, which reads as "the store is broken" rather than "wait a moment".
+    | RecordsTableTest pins this to the interval used in app.js.
+    |
+    */
+
+    'records_retry_seconds' => (int) env('KV_RECORDS_RETRY_SECONDS', 10),
 
 ];
