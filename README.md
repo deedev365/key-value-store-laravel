@@ -295,8 +295,9 @@ Or through the Composer script, which runs the same command:
 composer behat
 ```
 
-118 scenarios / 525 steps covering the same API behaviour in Gherkin, under
-`features/`. The suite is a second reading of the contract rather than extra
+118 scenarios / 529 steps covering the same API behaviour in Gherkin, under
+`tests/Behat/features/`, next to the `ApiContext` that implements their steps.
+The suite is a second reading of the contract rather than extra
 coverage: every scenario restates in plain language what a PHPUnit test asserts
 in code, which is what makes it useful to read and what makes a drift between
 the two worth investigating.

@@ -17,7 +17,7 @@ return (new Config)->withProfile(
     (new Profile('default'))
         ->withSuite(
             (new Suite('api'))
-                ->withPaths(__DIR__.'/features')
+                ->withPaths(__DIR__.'/tests/Behat/features')
                 ->withContexts(ApiContext::class)
         )
         ->withTesterOptions(
