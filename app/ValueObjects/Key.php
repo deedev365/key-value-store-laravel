@@ -35,6 +35,13 @@ final class Key implements JsonSerializable, Stringable
 
     private function __construct(public readonly string $value) {}
 
+    public static function routePattern(): string
+    {
+        $reserved = implode('|', array_map(preg_quote(...), self::RESERVED));
+
+        return '(?!(?:'.$reserved.')(?:/|$))'.self::PATTERN;
+    }
+
     /**
      * @throws InvalidKeyException
      */
