@@ -71,7 +71,9 @@ jobs:
           DB_DATABASE: ":memory:"
 
       - name: Run BDD suite
-        run: vendor/bin/behat --no-snippets --colors
+        # Each scenario boots its own application, so peak memory grows with
+        # the scenario count and had already reached ~127M of the default 128M.
+        run: php -d memory_limit=512M vendor/bin/behat --no-snippets --colors
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

@@ -58,7 +58,7 @@
             "@php vendor/bin/pint --ansi"
         ],
         "behat": [
-            "@php vendor/bin/behat --no-snippets"
+            "@php -d memory_limit=512M vendor/bin/behat --no-snippets"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
