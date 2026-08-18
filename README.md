@@ -164,6 +164,12 @@ timestamp T" are both just queries over that history:
 - **Value as of T** = the most recently inserted row for the key with
   `recorded_at <= T`.
 
+Editing an existing version is expressed in those same terms: `PUT /object/{key}`
+appends the correction and removes the one version it corrects, in a single
+transaction. It is the only place a single row is deleted — `DELETE` drops a key
+whole, and nothing anywhere runs an `UPDATE`. Since the current value is the
+last-written version, correcting an older one also makes the correction current.
+
 This lives in a single table, `kv_entries`: `id`, `key`, `value` (JSON),
 `recorded_at` (unix timestamp), `publish_time` (nullable unix timestamp),
 `created_at`/`updated_at`. It's indexed on `(key, recorded_at, id)`, which
@@ -194,8 +200,10 @@ response shape in
 | Endpoint | Controller |
 | --- | --- |
 | `POST /object` | [`StoreObjectController`](app/Http/Controllers/Api/StoreObjectController.php) |
+| `PUT /object/{key}` | [`ReplaceObjectController`](app/Http/Controllers/Api/ReplaceObjectController.php) |
 | `GET /object/{key}` | [`ShowObjectController`](app/Http/Controllers/Api/ShowObjectController.php) |
 | `GET /object/get_all_records/{page?}` | [`GetAllRecordsController`](app/Http/Controllers/Api/GetAllRecordsController.php) |
+| `GET /object/get_all_records/keys` | [`GetAllKeysController`](app/Http/Controllers/Api/GetAllKeysController.php) |
 | `GET /object/{key}/history` | [`ObjectHistoryController`](app/Http/Controllers/Api/ObjectHistoryController.php) |
 | `DELETE /object/{key}` | [`DeleteObjectController`](app/Http/Controllers/Api/DeleteObjectController.php) |
 
@@ -361,6 +369,30 @@ This listing picks each key's row by highest `id` among the published ones —
 the same rule `GET /object/{key}` applies, so the two cannot disagree about
 what is current for a key.
 
+### `GET /object/get_all_records/keys`
+
+The name of every key that has something published, alphabetically. A flat array
+of strings, not records — it exists to fill the page's key selector, and a
+dropdown needs names rather than values.
+
+```bash
+curl /object/get_all_records/keys
+```
+
+```json
+["config1", "mykey", "route.bangkok-chiang-mai.banner"]
+```
+
+Capped at `KV_MAX_KEYS_LISTED` (500) names, so this is not the unbounded read the
+paged listing deliberately avoids being. A key whose only versions are still
+waiting on their `publish_time` is absent, exactly as it is from every other
+read.
+
+It is a sub-path of the listing rather than a route of its own, so no second name
+has to be reserved: `get_all_records` already is, and a key cannot contain a
+slash. A key literally named `keys` is therefore still perfectly storable and
+readable at `/object/keys`.
+
 ### `GET /object/{key}/history`
 
 Returns every **published** version of `key`, oldest first. An unknown key
@@ -395,6 +427,60 @@ curl -X DELETE /object/mykey
 ```
 
 `200 OK` on success. `404` if the key has never been written.
+### `PUT /object/{key}`
+### `PUT /object/{key}?timestamp={unix}&publish_time={unix}`
+
+Corrects one stored version. The body is the same single-property envelope a
+write takes, and its property name must be the key in the URL.
+
+The version corrected is the one this URL would *read*: without `?timestamp` the
+current version, with it the version that was current at that moment. It is
+removed and the corrected value is appended in a single transaction — no row is
+ever updated.
+
+```bash
+curl -X PUT /object/mykey \
+  -H 'Content-Type: application/json' \
+  -d '{"mykey":"corrected"}'
+```
+
+```json
+{ "key": "mykey", "value": "corrected", "timestamp": 1440570000 }
+```
+
+`200 OK`, not `201`: no new address comes into being — the resource this URL
+names simply has a new current value. `timestamp` in the response is when the
+correction was written.
+
+`publish_time` says when the correction goes live. Leaving it out carries the
+replaced version's own time over, since a correction is a change of wording
+rather than a reschedule by default — and no schedule is lost that way, because
+every version this endpoint can reach is published already. Passing one wins
+over the carried-over value:
+
+```bash
+curl -X PUT "/object/mykey?publish_time=1440574000" \
+  -H 'Content-Type: application/json' \
+  -d '{"mykey":"corrected"}'
+```
+
+A `publish_time` in the *future* is accepted and does what it says: the version
+being corrected is removed and the correction is not readable until its time
+comes, so the key can answer `404` (or fall back to an older version) in
+between. That is a real choice with real consequences, so the page spells it out
+above the Save button rather than hiding it.
+
+`404` if the key has never been written, if no version was current at the given
+timestamp, or if the only versions are still waiting on their `publish_time` —
+the publish filter guards this write exactly as it guards every read, so a queued
+campaign cannot be edited before it goes live. `422` for a body that is not a
+single pair, a value nested too deeply, a non-integer `timestamp` or
+`publish_time`, or a body key that differs from the key in the URL.
+
+One consequence worth stating plainly: because the current value of a key is its
+*last-written* version, correcting an older version also makes that correction
+current. An append-only store has no way to write a version that is not the
+newest one.
 
 ## Getting started
 
@@ -427,15 +513,20 @@ The same suite through PHPUnit directly:
 php vendor/bin/phpunit
 ```
 
-277 tests / 973 assertions. Each API endpoint has its own feature test file
+453 tests / 1411 assertions. Each API endpoint has its own feature test file
 under `tests/Feature/`:
 
 - [`StoreObjectTest.php`](tests/Feature/StoreObjectTest.php) — `POST /object`
   (validation errors included).
+- [`ReplaceObjectTest.php`](tests/Feature/ReplaceObjectTest.php) — `PUT /object/{key}`,
+  including which version an edit lands on, that the rest of the history
+  survives, and that a version awaiting its `publish_time` cannot be edited.
 - [`ShowObjectTest.php`](tests/Feature/ShowObjectTest.php) — `GET /object/{key}`,
   including the timestamp query.
 - [`HistoryTest.php`](tests/Feature/HistoryTest.php) — `GET /object/{key}/history`.
 - [`GetAllRecordsTest.php`](tests/Feature/GetAllRecordsTest.php) — `GET /object/get_all_records`.
+- [`GetAllKeysTest.php`](tests/Feature/GetAllKeysTest.php) — `GET /object/get_all_records/keys`,
+  including that the two listing routes stay out of each other's way.
 - [`RemoveKeyObjectTest.php`](tests/Feature/RemoveKeyObjectTest.php) — `DELETE /object/{key}`.
 
 - [`RequestLimitsTest.php`](tests/Feature/RequestLimitsTest.php) — body size and
@@ -458,6 +549,12 @@ under `tests/Feature/`:
   optional, that neither rule leaked into the API, and that messages and data
   are rendered differently.
 
+- [`EditValueFormTest.php`](tests/Feature/EditValueFormTest.php) — the "Save
+  changes" affordance: that it stays disabled until a lookup has resolved a
+  version, that it replaces *that* version rather than whatever the timestamp box
+  says at click time, that the schedule pickers are filled from the version found
+  and read as UTC, and that it confirms before removing anything.
+
 - [`ContentSecurityPolicyTest.php`](tests/Feature/ContentSecurityPolicyTest.php) —
   the policy's directives, and that the page stays compatible with it: no
   inline script, no inline style, and every element the external script binds
@@ -479,7 +576,9 @@ endpoint, and they share
 - [`StoreObjectRepositoryTest.php`](tests/Unit/StoreObjectRepositoryTest.php) — `store()`.
 - [`ShowObjectRepositoryTest.php`](tests/Unit/ShowObjectRepositoryTest.php) — `findLatest()` and `findAtTimestamp()`.
 - [`GetAllRecordsRepositoryTest.php`](tests/Unit/GetAllRecordsRepositoryTest.php) — `allLatest()`.
+- [`GetAllKeysRepositoryTest.php`](tests/Unit/GetAllKeysRepositoryTest.php) — `allKeys()`.
 - [`ObjectHistoryRepositoryTest.php`](tests/Unit/ObjectHistoryRepositoryTest.php) — `history()`.
+- [`ReplaceObjectRepositoryTest.php`](tests/Unit/ReplaceObjectRepositoryTest.php) — `replace()`.
 - [`DeleteObjectRepositoryTest.php`](tests/Unit/DeleteObjectRepositoryTest.php) — `deleteAll()`.
 
 With coverage (requires Xdebug or PCOV locally):
@@ -513,7 +612,8 @@ so routing, middleware and validation all run exactly as they do under
 `php artisan test` — the whole suite takes about seven seconds.
 
 - `store_object.feature`, `show_object.feature`, `object_history.feature`,
-  `get_all_records.feature`, `remove_object.feature` — one file per endpoint.
+  `get_all_records.feature`, `get_all_keys.feature`, `remove_object.feature`,
+  `replace_object.feature` — one file per endpoint.
 - `records_pagination.feature` — page boundaries, paging by key rather than by
   version, and that the cut happens in SQL.
 - `request_limits.feature` — body size and nesting depth, including a lying
@@ -603,7 +703,34 @@ need the SSH-based flow.
 ## Design decisions
 
 - **Insert-only history, not a diff/patch log.** Simpler to reason about and
-  query; it's the standard approach for this kind of "point-in-time" API.
+  query; it's the standard approach for this kind of "point-in-time" API. The
+  log is still made only of inserts after `PUT` — see the next bullet for how
+  editing fits.
+- **Editing is replace-by-append, not `UPDATE`.** `PUT /object/{key}` appends
+  the corrected value and removes the one version it corrects, inside a
+  transaction in
+  [`replace()`](app/Repositories/EloquentKeyValueRepository.php). The browser
+  could have done this as two calls — a `POST` then a version-scoped `DELETE` —
+  and deliberately does not: two requests share no transaction, so a refusal
+  between them (a `429` is entirely plausible, the page already spends several
+  requests per save) leaves the store holding both versions with nothing able to
+  tell them apart. It would also mean exposing a public "delete just this
+  version" endpoint — a sharper tool than the feature needs, since it lets any
+  caller punch holes in the history — and the target would have to be re-resolved
+  *after* the store changed, using a row id the API never publishes. Server-side,
+  the `DELETE`'s affected-row count is the claim on the version: two callers
+  correcting the same version serialise on that row and the loser is told the
+  version is gone rather than appending a second correction of it. The reply is
+  `200`, not `201`, because no new address comes into being. The body's key must
+  equal the key in the URL, since two spellings of one identifier in one request
+  is where a silent "the path won" bug lives — and a mismatch would let
+  `PUT /object/a` delete a's version while writing b's. `publish_time` defaults
+  to the replaced version's own, since a correction is a change of wording
+  rather than a reschedule — and nothing is lost by that default, because every
+  version the endpoint can reach is published already. Passing one overrides it,
+  including a time in the future, which genuinely hides the key until then; the
+  page warns about that above the button rather than the API refusing a thing an
+  editor may well mean.
 - **One controller per endpoint.** Each route points at its own invokable
   single-action controller rather than at a method on one shared class. The
   endpoints have nothing in common but the repository they call — different
@@ -616,7 +743,10 @@ need the SSH-based flow.
   puts the key as the JSON property name rather than under fixed
   `key`/`value` fields, so the body is restricted to exactly one property —
   anything else is a `422`. This is enforced in
-  [`StoreObjectRequest`](app/Http/Requests/StoreObjectRequest.php).
+  [`WriteBody`](app/ValueObjects/WriteBody.php), which
+  [`ParsesWriteBody`](app/Http/Requests/Concerns/ParsesWriteBody.php) plugs into
+  the validator for both writes and edits — the envelope is one contract, so the
+  `POST` and the `PUT` cannot drift apart on what a body may look like.
 - **Values are stored verbatim.** Laravel's global `TrimStrings` and
   `ConvertEmptyStringsToNull` middleware rewrite the parsed JSON body, which
   would turn `"  a  "` into `"a"` and `""` into `null` before the value ever
@@ -628,7 +758,7 @@ need the SSH-based flow.
   decoded JSON body into the Symfony request bag, where global middleware
   rewrites it and Symfony's `_method` override reads from it. Parsing
   `$this->getContent()` in
-  [`StoreObjectRequest`](app/Http/Requests/StoreObjectRequest.php) keeps the
+  [`ParsesWriteBody`](app/Http/Requests/Concerns/ParsesWriteBody.php) keeps the
   stored data equal to what the client actually sent. Decoding to `stdClass`
   rather than to an associative array is what keeps `{"0":"a"}` (key `0`)
   distinct from the array body `["a"]`, and stops
@@ -652,10 +782,35 @@ need the SSH-based flow.
   inputs and the lookup key are therefore required, the message names the
   field at fault, and typing `""` is the way to store an empty string on
   purpose. A whitespace-only value is accepted as typed, matching the
-  verbatim-storage rule above. The lookup timestamp stays optional, since an
+  verbatim-storage rule above. The lookup version stays optional, since an
   absent one means "current value". "Get value", "Full history" and "Delete
   key" read the same field and share one guard, so the destructive button can
   never end up more permissive than the other two.
+- **The lookup block chooses; it does not type.** A key and a version are exact
+  identifiers that must match something stored, so a free-text box can only ever
+  produce a 404 or a silent miss — the key comes from a `<select>` filled by
+  `GET /object/get_all_records/keys`, and the version from a second one filled
+  by that key's own history. The version selector is hidden unless the key has
+  more than one published version: with a single version there is nothing to
+  choose between, and the empty "current value" option already means it. Versions
+  are listed newest first and labelled with the instant as well as the raw
+  timestamp, since one unix number cannot be told from another by eye. The lists
+  are refreshed wherever the store changes rather than only at load, and a
+  refused refresh leaves the options on screen alone — emptying the selector on
+  a `429` would read as "the store has no keys".
+- **"Save changes" edits the version that was looked up.** The edit box, the two
+  schedule pickers and the Save button in the lookup block start disabled and
+  are armed only by a successful "Get value", which fills the box with the value
+  it found — as JSON, so an object survives being edited — and the pickers with
+  that version's own `publish_time`, so a correction keeps its schedule unless
+  the editor changes it. Save then replaces *that* version: the key and
+  timestamp the lookup actually used are remembered rather than re-read from the
+  boxes on click, because typing a new timestamp afterwards would otherwise send
+  the edit to a version other than the one on screen. The schedule pickers are
+  read at click time instead, since they belong to the edit being written rather
+  than to the version being replaced. Editing the key or the timestamp box,
+  listing the history or deleting the key disarms it again. Because the old
+  version is removed for good, saving confirms first, exactly as deleting does.
 - **No inline CSS or JS on the page.** The front end's stylesheet and script
   live in [`public/css/app.css`](public/css/app.css) and
   [`public/js/app.js`](public/js/app.js) rather than inline in the Blade

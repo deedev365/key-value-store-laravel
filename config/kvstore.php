@@ -46,6 +46,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Keys offered by the selector
+    |--------------------------------------------------------------------------
+    |
+    | How many key names GET /object/get_all_records/keys returns, and so how
+    | many the page's key selector can offer. A cap rather than a page: a
+    | dropdown showing an arbitrary half of the store would be worse than one
+    | that is honest about showing the first N. Raise it if the store outgrows
+    | it — nothing breaks below the limit, and the listing table remains the
+    | way to reach everything.
+    |
+    */
+
+    'max_keys_listed' => (int) env('KV_MAX_KEYS_LISTED', 500),
+
+    /*
+    |--------------------------------------------------------------------------
     | Requests per minute
     |--------------------------------------------------------------------------
     |

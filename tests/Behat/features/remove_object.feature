@@ -1,6 +1,7 @@
 Feature: Removing a key
-  DELETE /object/{key} is the one operation that is not append-only: it drops
-  every version of the key at once.
+  DELETE /object/{key} is the one operation that removes a key outright: it
+  drops every version at once. (PUT removes a row too, but only the single
+  version it appends a correction for — see replace_object.feature.)
 
   Scenario: Deleting a key removes all of its versions
     Given the key "mykey" has the value "value1" recorded at 1000

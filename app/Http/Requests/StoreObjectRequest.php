@@ -2,8 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Exceptions\InvalidBodyException;
-use App\ValueObjects\WriteBody;
+use App\Http\Requests\Concerns\ParsesWriteBody;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -12,11 +11,12 @@ use Illuminate\Foundation\Http\FormRequest;
  * name is the storage key, e.g. {"mykey": "value1"} — the key is not a fixed
  * field name, so rule-based validation does not apply. Validation is instead
  * construction: WriteBody either parses the body or says why it could not,
- * and this class only translates that answer into the validator's vocabulary.
+ * and ParsesWriteBody translates that answer into the validator's vocabulary
+ * for this request and for ReplaceObjectRequest alike.
  */
 class StoreObjectRequest extends FormRequest
 {
-    private ?WriteBody $parsed = null;
+    use ParsesWriteBody;
 
     public function authorize(): bool
     {
@@ -40,18 +40,7 @@ class StoreObjectRequest extends FormRequest
 
     public function withValidator(ValidatorContract $validator): void
     {
-        $validator->after(function (ValidatorContract $validator) {
-            try {
-                $this->parsed = $this->parse();
-            } catch (InvalidBodyException $e) {
-                $validator->errors()->add($e->field, $e->getMessage());
-            }
-        });
-    }
-
-    public function body(): WriteBody
-    {
-        return $this->parsed ??= $this->parse();
+        $validator->after(fn (ValidatorContract $validator) => $this->validateWriteBody($validator));
     }
 
     /**
@@ -70,16 +59,5 @@ class StoreObjectRequest extends FormRequest
         }
 
         return (int) $this->query('publish_time');
-    }
-
-    /**
-     * @throws InvalidBodyException
-     */
-    private function parse(): WriteBody
-    {
-        return WriteBody::fromJson(
-            $this->getContent(),
-            (int) config('kvstore.max_value_depth'),
-        );
     }
 }

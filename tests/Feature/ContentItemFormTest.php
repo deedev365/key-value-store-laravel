@@ -126,10 +126,13 @@ class ContentItemFormTest extends TestCase
         // message rather than nesting an object under it.
         $script = $this->script();
 
+        // The declaration plus its two callers: the free-form write box and the
+        // lookup block's edit box, which is free-form for the same reason — it
+        // edits any stored value, not only a message.
         $this->assertSame(
-            2,
+            3,
             preg_match_all('/parseValue\(/', $script),
-            'parseValue() is called outside the free-form write handler'
+            'parseValue() is called somewhere other than the two free-form value boxes'
         );
 
         $this->assertStringContainsString('{ [key]: { message: content } }', $script);

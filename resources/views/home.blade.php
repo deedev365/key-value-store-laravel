@@ -79,20 +79,65 @@
 
     <section>
         <h2>Look up by key</h2>
+        {{--
+            The key and the version are chosen from what the store actually
+            holds, rather than typed: both are exact identifiers, and a typo in
+            either is a 404 at best. The script fills the key list from
+            GET /object/get_all_records/keys and the version list from the
+            key's own history.
+        --}}
         <div class="row">
             <div>
                 <label for="lookup-key">Key</label>
-                <input id="lookup-key" type="text" placeholder="mykey" pattern="[A-Za-z0-9_.\-]+" maxlength="255" required>
+                <select id="lookup-key" required>
+                    <option value="">Choose a key…</option>
+                </select>
             </div>
-            <div>
-                {{-- Deliberately not required: an absent timestamp means
-                     "current value", which is the common case. --}}
-                <label for="lookup-timestamp">Timestamp (optional)</label>
-                <input id="lookup-timestamp" type="text" placeholder="1440569580">
+            {{--
+                Only shown once a key with more than one published version is
+                chosen: with a single version there is nothing to pick between,
+                and "current value" is what every other button means anyway.
+            --}}
+            <div id="lookup-timestamp-field" hidden>
+                <label for="lookup-timestamp">Version</label>
+                <select id="lookup-timestamp">
+                    <option value="">Current value</option>
+                </select>
             </div>
         </div>
+        {{--
+            The value of whatever "Get value" resolved, as JSON, so it can be
+            corrected and saved back. Filled by the script rather than typed
+            from scratch: Save replaces the version that was looked up, so this
+            box, the two pickers below it and the button all stay disabled until
+            a lookup has said which version that is. Not required — the other
+            three buttons never read any of them.
+        --}}
+        <div>
+            <label for="lookup-value">Value of the version found (JSON)</label>
+            <input id="lookup-value" type="text" placeholder="Press “Get value” first" disabled>
+        </div>
+        {{--
+            When the correction goes live: the same calendar and clock the
+            content form schedules with, read as UTC for the same reason.
+            "Get value" fills them from the version it found, so the schedule is
+            visible and is kept unless it is changed — and clearing both leaves
+            the replaced version's own time in place rather than dropping it.
+        --}}
+        <div class="row">
+            <div>
+                <label for="publish-date">Active from — date (UTC)</label>
+                <input id="publish-date" type="date" disabled>
+            </div>
+            <div>
+                <label for="publish-time">Active from — time (UTC)</label>
+                <input id="publish-time" type="time" step="60" disabled>
+            </div>
+        </div>
+        <p id="publish-time-preview" class="muted" hidden></p>
         <div class="actions">
             <button id="lookup-btn">Get value</button>
+            <button id="save-btn" class="secondary" disabled>Save changes</button>
             <button id="history-btn" class="secondary">Full history</button>
             <button id="delete-btn" class="danger">Delete key</button>
         </div>

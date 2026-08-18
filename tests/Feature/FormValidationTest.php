@@ -48,28 +48,35 @@ class FormValidationTest extends TestCase
 
     public function test_the_lookup_key_is_marked_required(): void
     {
-        $this->assertInputIsRequired('lookup-key', $this->page());
+        // A <select> rather than a text box now, and still required: the empty
+        // placeholder option is what "nothing chosen yet" looks like.
+        $this->assertMatchesRegularExpression(
+            '/<select[^>]*id="lookup-key"[^>]*\brequired\b/i',
+            $this->page(),
+            '#lookup-key is not marked required'
+        );
     }
 
-    public function test_the_timestamp_field_stays_optional(): void
+    public function test_the_version_selector_stays_optional(): void
     {
-        // An absent timestamp means "current value" — requiring it would break
-        // the common case.
+        // An empty choice means "current value" — requiring it would break the
+        // common case, and the field is hidden entirely for a single-version key.
         $this->assertSame(
             0,
-            preg_match('/<input[^>]*id="lookup-timestamp"[^>]*\brequired\b/i', $this->page()),
-            'the optional timestamp field was marked required'
+            preg_match('/<select[^>]*id="lookup-timestamp"[^>]*\brequired\b/i', $this->page()),
+            'the optional version selector was marked required'
         );
     }
 
     public function test_every_field_keeps_its_placeholder(): void
     {
+        // The lookup block chooses from the store rather than typing, so only
+        // the free-form boxes carry placeholders.
         $page = $this->page();
 
         $this->assertMatchesRegularExpression('/id="write-key"[^>]*placeholder="mykey"/i', $page);
         $this->assertMatchesRegularExpression('/id="write-value"[^>]*placeholder="/i', $page);
-        $this->assertMatchesRegularExpression('/id="lookup-key"[^>]*placeholder="mykey"/i', $page);
-        $this->assertMatchesRegularExpression('/id="lookup-timestamp"[^>]*placeholder="/i', $page);
+        $this->assertMatchesRegularExpression('/id="lookup-value"[^>]*placeholder="/i', $page);
     }
 
     // ---------------------------------------------------------------

@@ -6,9 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * A single immutable version of a key's value. The API never updates or
- * deletes a row — a write always inserts a new one, which is what makes the
- * store "version-controlled".
+ * A single immutable version of a key's value. No row is ever modified: a
+ * write always inserts a new one, which is what makes the store
+ * "version-controlled". There is no UPDATE anywhere in the application.
+ *
+ * Rows are only removed whole. `DELETE /object/{key}` drops every version of
+ * a key, and `PUT /object/{key}` removes exactly the one version it appends a
+ * correction for, in a single transaction.
  *
  * The properties below are what the model hands out, not the column types:
  * `value` is a json column cast to 'object', so it comes back as whatever

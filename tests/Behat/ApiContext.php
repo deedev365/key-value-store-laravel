@@ -340,6 +340,12 @@ class ApiContext implements Context
         $this->request('GET', '/object/'.$key.'/history');
     }
 
+    #[When('I list all keys')]
+    public function iListAllKeys(): void
+    {
+        $this->request('GET', '/object/get_all_records/keys');
+    }
+
     #[When('I list all records')]
     public function iListAllRecords(): void
     {
@@ -366,6 +372,40 @@ class ApiContext implements Context
         $this->request('GET', '/object/get_all_records');
         $this->queryLog = $db->getQueryLog();
         $db->disableQueryLog();
+    }
+
+    #[When('I replace the key :key with the value :value')]
+    public function iReplaceTheKeyWithTheValue(string $key, string $value): void
+    {
+        $this->replaceBody($key, json_encode([$key => $value], JSON_UNESCAPED_SLASHES));
+    }
+
+    #[When('I replace the key :key at timestamp :timestamp with the value :value')]
+    public function iReplaceTheKeyAtTimestampWithTheValue(string $key, string $timestamp, string $value): void
+    {
+        $this->replaceBody(
+            $key.'?timestamp='.urlencode($timestamp),
+            json_encode([$key => $value], JSON_UNESCAPED_SLASHES),
+        );
+    }
+
+    /**
+     * For the envelope cases, where the point is a body the endpoint refuses —
+     * including one naming a key other than the one in the URL.
+     */
+    #[When('I replace the key :key with the value :value published at :publishTime')]
+    public function iReplaceTheKeyWithTheValuePublishedAt(string $key, string $value, string $publishTime): void
+    {
+        $this->replaceBody(
+            $key.'?publish_time='.urlencode($publishTime),
+            json_encode([$key => $value], JSON_UNESCAPED_SLASHES),
+        );
+    }
+
+    #[When('I replace the key :key with the body :body')]
+    public function iReplaceTheKeyWithTheBody(string $key, string $body): void
+    {
+        $this->replaceBody($key, $body);
     }
 
     #[When('I delete the key :key')]
@@ -908,6 +948,15 @@ class ApiContext implements Context
     private function writeBody(string $body, array $server = []): void
     {
         $this->request('POST', '/object', $body, $server);
+    }
+
+    /**
+     * $target is the key, optionally carrying its own query string — the edit
+     * endpoint names the version it corrects in the URL, like the read does.
+     */
+    private function replaceBody(string $target, string $body): void
+    {
+        $this->request('PUT', '/object/'.$target, $body);
     }
 
     /**

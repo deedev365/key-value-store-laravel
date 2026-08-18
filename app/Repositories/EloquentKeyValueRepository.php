@@ -12,6 +12,11 @@ use Illuminate\Support\Facades\DB;
  * Writes append versions; the "latest" of a key is its highest id, and
  * listings are paged and ordered in SQL rather than sliced in PHP.
  *
+ * Nothing here ever runs an UPDATE. replace() comes closest — a correction —
+ * and it too appends a row, deleting only the one version it corrects, which
+ * is also why a correction to an older version becomes the key's current
+ * value; deleteAll() drops a key entirely.
+ *
  * A version may carry a `publish_time`, and *every* read here honours it
  * through onlyPublished(): a version is returned only once that time has
  * passed. No endpoint can reveal a version another endpoint is hiding, so
@@ -156,6 +161,33 @@ class EloquentKeyValueRepository
     }
 
     /**
+     * The name of every key that has something published, in alphabetical
+     * order — what the page's key selector offers.
+     *
+     * Keys, not records: the selector needs names, and a key with a large
+     * value would otherwise be paid for in full just to fill a dropdown.
+     * `$limit` is mandatory for the same reason allLatest()'s is — there is no
+     * call here that asks the store for everything — but it is a cap rather
+     * than a page: a selector that offered half the keys would be worse than
+     * one that says it is showing the first N.
+     *
+     * @return Collection<int, string>
+     */
+    public function allKeys(int $limit, ?int $now = null): Collection
+    {
+        $now ??= now()->timestamp;
+
+        $query = KvEntry::query()->select('key')->distinct();
+
+        $this->onlyPublished($query, $now);
+
+        return $query
+            ->orderBy('key')
+            ->limit(max(0, $limit))
+            ->pluck('key');
+    }
+
+    /**
      * Every published version of a key, oldest first. A version still waiting
      * for its publish time is absent: the log is public, so listing a queued
      * campaign here would announce it before its time.
@@ -174,6 +206,54 @@ class EloquentKeyValueRepository
             ->orderBy('recorded_at')
             ->orderBy('id')
             ->get();
+    }
+
+    /**
+     * Corrects one version: removes the version being corrected and appends
+     * the corrected value, in a single transaction. Both happen or neither
+     * does.
+     *
+     * Still no UPDATE. A correction is a row of its own, which is what keeps
+     * `id` ordering meaningful — and only the version being corrected is
+     * removed, so the rest of the key's history stays readable.
+     *
+     * The delete runs first and its affected-row count is the claim on the
+     * version: two callers correcting the same version serialise on that row,
+     * and the one that finds it already gone returns null rather than
+     * appending a second correction of a version that no longer exists.
+     * Inserting first would need the same check, but only after writing a row
+     * it might have to take back.
+     *
+     * The replacement therefore always carries the higher `id` — i.e. it is
+     * the current version by exactly the rule findLatest() applies. Correcting
+     * an *older* version consequently makes the correction current too; in an
+     * append-only store there is no way to append a value that is not the
+     * newest one.
+     *
+     * `$publishTime` is when the correction goes live, and null — the default —
+     * copies the replaced version's own time: a correction is a change of
+     * wording rather than a reschedule unless one is asked for. Every read here
+     * hides unpublished versions, so a version that reaches this method is
+     * already live and the copied time is already past.
+     *
+     * Returns the new version, or null if the version to correct had gone.
+     */
+    public function replace(KvEntry $version, mixed $value, int $recordedAt, ?int $publishTime = null): ?KvEntry
+    {
+        return DB::transaction(function () use ($version, $value, $recordedAt, $publishTime): ?KvEntry {
+            $claimed = KvEntry::query()->whereKey($version->getKey())->delete();
+
+            if ($claimed !== 1) {
+                return null;
+            }
+
+            return $this->store(
+                $version->key,
+                $value,
+                $recordedAt,
+                $publishTime ?? $version->publish_time,
+            );
+        });
     }
 
     public function deleteAll(string $key): bool
